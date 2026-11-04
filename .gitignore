@@ -1,0 +1,94 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+
+### Environment Variables ###
+.env
+.env.*
+!.env.example
+
+### Spring Boot Configuration (Secrets) ###
+application-secret.yml
+application-secret.yaml
+application-secret.properties
+application-local-secret.yml
+application-local-secret.yaml
+
+### Local Configuration ###
+/src/main/resources/application-local.yml
+/src/main/resources/application-local.yaml
+
+### Logs ###
+*.log
+logs/
+log/
+*.log.*
+
+### OS ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Temporary Files ###
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+### Test / Coverage ###
+coverage/
+jacoco.exec
+*.exec
+
+### Docker Local Overrides ###
+compose.override.yaml
+compose.override.yml
+docker-compose.override.yml
+docker-compose.override.yaml
+
+### AWS Credentials ###
+.aws/
+*.pem
+*.key
+
+### API Credentials ###
+secrets/
+credentials.json
+service-account.json
