@@ -1,4 +1,4 @@
-package com.irion.irion_backend.global.security;
+package com.irion.irion_backend.global.security.jwt;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
