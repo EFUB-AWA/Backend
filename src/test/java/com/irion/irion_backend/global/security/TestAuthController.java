@@ -1,14 +1,14 @@
 package com.irion.irion_backend.global.security;
 
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.irion.irion_backend.global.security.auth.AuthMember;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController()
+@RestController
 public class TestAuthController {
 
     @GetMapping("/api/test/me")
-    public Long getMe(@AuthenticationPrincipal Long userId) {
-        return userId;
+    public Long getMe(@AuthMember Long requesterId) {
+        return requesterId;
     }
 }
