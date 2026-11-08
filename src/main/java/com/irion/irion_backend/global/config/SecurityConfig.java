@@ -45,7 +45,7 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers("/api/auth/kakao/login",
-                                "/api/auth/reissue",
+                                "/api/auth/reissue", "/api/dev/token",
                                 "/error"
                         ).permitAll()
                         .anyRequest().authenticated())
