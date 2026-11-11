@@ -6,5 +6,5 @@ import jakarta.validation.constraints.Size;
 public record KakaoLoginRequest(
         @NotBlank
         @Size(max = 512)
-        String code
+        String authorizationCode
 ) {}
