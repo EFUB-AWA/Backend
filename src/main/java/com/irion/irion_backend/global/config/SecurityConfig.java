@@ -1,5 +1,6 @@
 package com.irion.irion_backend.global.config;
 
+import com.irion.irion_backend.global.config.properties.CorsProperties;
 import com.irion.irion_backend.global.security.handler.JwtAccessDeniedHandler;
 import com.irion.irion_backend.global.security.handler.JwtAuthenticationEntryPoint;
 import com.irion.irion_backend.global.security.jwt.JwtAuthenticationFilter;
