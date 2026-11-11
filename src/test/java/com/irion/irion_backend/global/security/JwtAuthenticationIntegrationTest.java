@@ -1,6 +1,7 @@
 package com.irion.irion_backend.global.security;
 
 import com.irion.irion_backend.domain.auth.exception.AuthErrorCode;
+import com.irion.irion_backend.global.security.jwt.IssuedToken;
 import com.irion.irion_backend.global.security.jwt.JwtProperties;
 import com.irion.irion_backend.global.security.jwt.JwtProvider;
 import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
@@ -43,7 +44,7 @@ public class JwtAuthenticationIntegrationTest {
     @Test
     void 유효한_토큰_입력_시_200_body_1() throws Exception {
         // given: 유효한 토큰
-        String token = jwtProvider.createAccessToken(1L);
+        String token = jwtProvider.createAccessToken(1L).token();
 
         // when & then: 1 반환
         mockMvc.perform(get(TEST_URI)
@@ -66,7 +67,7 @@ public class JwtAuthenticationIntegrationTest {
     void 만료된_토큰이면_401_AUTH_TOKEN_EXPIRED() throws Exception{
         // given: 서버와 같은 secret, 만료시간 -1초
         JwtProvider expiredProvider = createProvider(jwtProperties.secret(), Duration.ofSeconds(-1));
-        String expiredToken = expiredProvider.createAccessToken(1L);
+        String expiredToken = expiredProvider.createAccessToken(1L).token();
 
         // when & then
         assertUnauthorized(expiredToken, AuthErrorCode.AUTH_TOKEN_EXPIRED);
@@ -81,7 +82,7 @@ public class JwtAuthenticationIntegrationTest {
                 jwtProperties.accessExpiration()
         );
 
-        String forgedToken = forgedProvider.createAccessToken(1L);
+        String forgedToken = forgedProvider.createAccessToken(1L).token();
 
         // when & then
         assertUnauthorized(forgedToken, AuthErrorCode.AUTH_INVALID_TOKEN);
@@ -91,19 +92,18 @@ public class JwtAuthenticationIntegrationTest {
     @Test
     void 블랙리스트에_등록된_토큰이면_401_AUTH_LOGGED_OUT_TOKEN() throws Exception {
         // given: 블랙리스트에 TTL 1분으로 등록
-        String blacklistedToken = jwtProvider.createAccessToken(1L);
-        String jti = jwtProvider.getJti(jwtProvider.parseAccessToken(blacklistedToken));
-        tokenBlacklistRepository.add(jti, Duration.ofMinutes(1));
+        IssuedToken blacklisted = jwtProvider.createAccessToken(1L);
+        tokenBlacklistRepository.add(blacklisted.jti(), Duration.ofMinutes(1));
 
         // when & then
-        assertUnauthorized(blacklistedToken, AuthErrorCode.AUTH_LOGGED_OUT_TOKEN);
+        assertUnauthorized(blacklisted.token(), AuthErrorCode.AUTH_LOGGED_OUT_TOKEN);
     }
 
 
     @Test
     void refresh_토큰이면_401_AUTH_INVALID_TOKEN() throws Exception {
         // given: refresh token
-        String refreshToken = jwtProvider.createRefreshToken(1L);
+        String refreshToken = jwtProvider.createRefreshToken(1L).token();
 
         // when & then
         assertUnauthorized(refreshToken, AuthErrorCode.AUTH_INVALID_TOKEN);
