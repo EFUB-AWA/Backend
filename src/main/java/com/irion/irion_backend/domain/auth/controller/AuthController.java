@@ -26,7 +26,7 @@ public class AuthController {
 
     @PostMapping("/kakao/login")
     public ResponseEntity<AuthResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request) {
-        LoginTokens tokens = authService.kakaoLogin(request.code());
+        LoginTokens tokens = authService.kakaoLogin(request.authorizationCode());
         ResponseCookie cookie = refreshTokenCookieProvider.create(tokens.refreshToken());
 
         return ResponseEntity.ok()
