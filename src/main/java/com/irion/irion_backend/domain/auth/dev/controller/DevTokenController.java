@@ -26,7 +26,7 @@ public class DevTokenController {
     @PostMapping("/token")
     public ResponseEntity<DevTokenResponse> getDevToken(@Valid @RequestBody DevTokenRequest request) {
         Long userId = request.userId();
-        String accessToken = jwtProvider.createAccessToken(userId);
+        String accessToken = jwtProvider.createAccessToken(userId).token();
         DevTokenResponse response = DevTokenResponse.of(accessToken);
 
         return ResponseEntity.ok(response);

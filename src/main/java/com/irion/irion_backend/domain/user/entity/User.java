@@ -30,15 +30,21 @@ public class User extends BaseEntity {
     @Column(name = "profile_image_url", length = 2048)
     private String profileImageUrl;
 
+    @Column(name = "kakao_id", nullable = false, unique = true)
+    private Long kakaoId;
+
+
     public static User create(
             String nickname,
             String email,
-            String profileImageUrl
+            String profileImageUrl,
+            Long kakaoId
     ) {
         User user = new User();
         user.nickname = nickname;
         user.email = email;
         user.profileImageUrl = profileImageUrl;
+        user.kakaoId = kakaoId;
         return user;
     }
 

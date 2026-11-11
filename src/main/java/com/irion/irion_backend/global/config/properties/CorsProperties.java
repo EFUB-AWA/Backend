@@ -1,4 +1,4 @@
-package com.irion.irion_backend.global.config;
+package com.irion.irion_backend.global.config.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

@@ -22,7 +22,7 @@ public class JwtProviderTest {
 
     @Test
     void 발급한_토큰에서_userId를_추출한다() {
-        String token = jwtProvider.createAccessToken(1L);
+        String token = jwtProvider.createAccessToken(1L).token();
         Claims claims = jwtProvider.parseAccessToken(token);
 
         assertThat(jwtProvider.getUserId(claims)).isEqualTo(1L);
@@ -30,8 +30,8 @@ public class JwtProviderTest {
 
     @Test
     void 같은_userId로_발급해도_jti는_다르다() {
-        Claims first = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L));
-        Claims second = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L));
+        Claims first = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L).token());
+        Claims second = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L).token());
 
         assertThat(jwtProvider.getJti(first)).isNotEqualTo(jwtProvider.getJti(second));
     }
@@ -39,7 +39,7 @@ public class JwtProviderTest {
     @Test
     void 만료된_토큰은_AUTH_TOKEN_EXPIRED() {
         JwtProvider expiredProvider = createProvider(SECRET, Duration.ofSeconds(-1));
-        String token = expiredProvider.createAccessToken(1L);
+        String token = expiredProvider.createAccessToken(1L).token();
 
         assertErrorCode(token, AuthErrorCode.AUTH_TOKEN_EXPIRED);
     }
@@ -47,7 +47,7 @@ public class JwtProviderTest {
     @Test
     void 다른_키로_서명된_토큰은_AUTH_INVALID_TOKEN() {
         JwtProvider otherProvider = createProvider(OTHER_SECRET, Duration.ofMinutes(30));
-        String forgedToken = otherProvider.createAccessToken(1L);
+        String forgedToken = otherProvider.createAccessToken(1L).token();
 
         assertErrorCode(forgedToken, AUTH_INVALID_TOKEN);
     }
@@ -64,19 +64,28 @@ public class JwtProviderTest {
 
     @Test
     void refresh_token을_access_token으로_사용하면_AUTH_INVALID_TOKEN() {
-        String refreshToken = jwtProvider.createRefreshToken(1L);
+        String refreshToken = jwtProvider.createRefreshToken(1L).token();
 
         assertErrorCode(refreshToken, AUTH_INVALID_TOKEN);
     }
 
     @Test
     void 남은_유효시간은_0보다_크고_발급_유효시간_이하다() {
-        Claims claims = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L));
+        Claims claims = jwtProvider.parseAccessToken(jwtProvider.createAccessToken(1L).token());
 
         Duration remaining = jwtProvider.getRemainingValidity(claims);
 
         assertThat(remaining).isPositive();
         assertThat(remaining).isLessThanOrEqualTo(Duration.ofMinutes(30));
+    }
+
+    @Test
+    void 발급_결과의_jti와_만료시간이_토큰과_일치한다() {
+        IssuedToken issued = jwtProvider.createAccessToken(1L);
+        Claims claims = jwtProvider.parseAccessToken(issued.token());
+
+        assertThat(jwtProvider.getJti(claims)).isEqualTo(issued.jti());
+        assertThat(issued.expiresIn()).isEqualTo(Duration.ofMinutes(30));
     }
 
 

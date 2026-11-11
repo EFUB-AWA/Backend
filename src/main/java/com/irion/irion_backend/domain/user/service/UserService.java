@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -40,8 +42,20 @@ public class UserService {
         return NicknameUpdateResponse.from(user);
     }
 
+    @Transactional
+    public User createKakaoUser(Long kakaoId, String nickname, String email, String profileImageUrl) {
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_EMAIL);
+        }
+        return userRepository.save(User.create(nickname, email, profileImageUrl, kakaoId));
+    }
+
     private User findUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
     }
+
+    public Optional<User> findByKakaoId(Long kakaoId) {
+        return userRepository.findByKakaoId(kakaoId);
+   }
 }

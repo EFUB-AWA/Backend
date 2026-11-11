@@ -33,19 +33,25 @@ public class JwtProvider {
     }
 
     // 토큰 발급
-    public String createAccessToken(Long userId) {
-        return createToken(userId, ACCESS_TYPE, jwtProperties.accessExpiration());
+    public IssuedToken createAccessToken(Long userId) {
+        return issue(userId, ACCESS_TYPE, jwtProperties.accessExpiration());
     }
 
-    public String createRefreshToken(Long userId) {
-        return createToken(userId, REFRESH_TYPE, jwtProperties.refreshExpiration());
+    public IssuedToken createRefreshToken(Long userId) {
+        return issue(userId, REFRESH_TYPE, jwtProperties.refreshExpiration());
     }
 
-    private String createToken(Long userId, String type, Duration validity) {
+    private IssuedToken issue(Long userId, String type, Duration validity) {
+        String jti = UUID.randomUUID().toString();
+        String token = createToken(userId, jti, type, validity);
+        return new IssuedToken(token, jti, validity);
+    }
+
+    private String createToken(Long userId, String jti, String type, Duration validity) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
-                .id(UUID.randomUUID().toString())    // jti: 블랙리스트 키
+                .id(jti)    // jti: 블랙리스트 키
                 .claim(TOKEN_TYPE_CLAIM, type)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(validity)))
@@ -80,7 +86,7 @@ public class JwtProvider {
     }
 
     public String getJti(Claims claims) {
-        return String.valueOf(claims.getId());
+        return claims.getId();
     }
 
     // 남은 유효 시간, 로그아웃 시 블랙리스트 TTL로 사용
