@@ -21,7 +21,13 @@ public record KakaoUserInfoResponse(
             Profile profile,
 
             @JsonProperty("email")
-            String email
+            String email,
+
+            @JsonProperty("is_email_verified")
+            Boolean isEmailVerified,
+
+            @JsonProperty("is_email_valid")
+            Boolean isEmailValid
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -52,6 +58,12 @@ public record KakaoUserInfoResponse(
             return null;
         }
         return profile.profileImageUrl();
+    }
+
+    public boolean hasVerifiedEmail() {
+        return kakaoAccount() != null
+                && Boolean.TRUE.equals(kakaoAccount().isEmailVerified())
+                && Boolean.TRUE.equals(kakaoAccount().isEmailValid());
     }
 
     public String email() {
