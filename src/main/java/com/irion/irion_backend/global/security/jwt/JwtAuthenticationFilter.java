@@ -9,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
@@ -22,16 +23,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final String TOKEN_HEADER = "Authorization";
-    private static final String TOKEN_PREFIX = "Bearer ";
-
     private final JwtProvider jwtProvider;
     private final TokenBlacklistRepository tokenBlacklistRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                  FilterChain filterChain) throws ServletException, IOException {
-        String token = resolveToken(request);
+        String token = BearerTokenResolver.resolve(request.getHeader(HttpHeaders.AUTHORIZATION));
 
         // 토큰이 존재하지 않는 경우
         if (ObjectUtils.isEmpty(token)) {
@@ -49,17 +47,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    // 토큰 추출
-    private String resolveToken(HttpServletRequest request) {
-        String token = request.getHeader(TOKEN_HEADER);
-
-        if (!ObjectUtils.isEmpty(token) && token.startsWith(TOKEN_PREFIX)) {
-            return token.substring(TOKEN_PREFIX.length());
-        }
-
-        return null;
     }
 
     // 유효한 토큰인지 확인

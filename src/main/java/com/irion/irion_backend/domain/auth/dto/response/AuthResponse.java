@@ -1,5 +1,6 @@
-package com.irion.irion_backend.domain.auth.dto;
+package com.irion.irion_backend.domain.auth.dto.response;
 
+import com.irion.irion_backend.domain.auth.dto.LoginTokens;
 import com.irion.irion_backend.domain.user.entity.User;
 
 public record AuthResponse(

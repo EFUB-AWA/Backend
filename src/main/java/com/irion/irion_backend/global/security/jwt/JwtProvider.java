@@ -62,8 +62,17 @@ public class JwtProvider {
 
     // 검증
     public Claims parseAccessToken(String token) {
+        return parseWithType(token, ACCESS_TYPE);
+    }
+
+    public Claims parseRefreshToken(String token) {
+        return parseWithType(token, REFRESH_TYPE);
+    }
+
+    private Claims parseWithType(String token, String expectedType) {
         Claims claims = parseClaims(token);
-        if (!ACCESS_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
+
+        if (!expectedType.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
             throw new BusinessException(AuthErrorCode.AUTH_INVALID_TOKEN);
         }
         return claims;
