@@ -1,8 +1,8 @@
 package com.irion.irion_backend.domain.auth.controller;
 
 import com.irion.irion_backend.domain.auth.cookie.RefreshTokenCookieProvider;
-import com.irion.irion_backend.domain.auth.dto.AuthResponse;
-import com.irion.irion_backend.domain.auth.dto.KakaoLoginRequest;
+import com.irion.irion_backend.domain.auth.dto.response.AuthResponse;
+import com.irion.irion_backend.domain.auth.dto.request.KakaoLoginRequest;
 import com.irion.irion_backend.domain.auth.dto.LoginTokens;
 import com.irion.irion_backend.domain.auth.service.AuthService;
 import jakarta.validation.Valid;

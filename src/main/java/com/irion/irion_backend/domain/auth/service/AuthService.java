@@ -2,7 +2,7 @@ package com.irion.irion_backend.domain.auth.service;
 
 import com.irion.irion_backend.domain.auth.dto.LoginResult;
 import com.irion.irion_backend.domain.auth.dto.LoginTokens;
-import com.irion.irion_backend.domain.auth.dto.ReissueTokens;
+import com.irion.irion_backend.domain.auth.dto.TokenPair;
 import com.irion.irion_backend.domain.auth.exception.AuthErrorCode;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.KakaoOAuthClient;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.dto.KakaoUserInfoResponse;
@@ -61,7 +61,7 @@ public class AuthService {
     }
 
     // 토큰 재발급
-    public ReissueTokens reissue(String refreshToken) {
+    public TokenPair reissue(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new BusinessException(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND);
         }
@@ -80,11 +80,7 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_REFRESH_TOKEN_MISMATCH);
         }
 
-        IssuedToken newAccessToken = jwtProvider.createAccessToken(userId);
-        IssuedToken newRefreshToken = jwtProvider.createRefreshToken(userId);
-        refreshTokenRepository.save(userId, newRefreshToken.jti(), newRefreshToken.expiresIn());
-
-        return new ReissueTokens(newAccessToken, newRefreshToken);
+        return issueAndSave(userId);
     }
 
 
@@ -92,11 +88,16 @@ public class AuthService {
 
     private LoginTokens issueTokens(LoginResult result) {
         Long userId = result.user().getId();
+        TokenPair tokens = issueAndSave(userId);
 
+        return LoginTokens.of(tokens.accessToken(), tokens.refreshToken(), result);
+    }
+
+    private TokenPair issueAndSave(Long userId) {
         IssuedToken accessToken = jwtProvider.createAccessToken(userId);
         IssuedToken refreshToken = jwtProvider.createRefreshToken(userId);
         refreshTokenRepository.save(userId, refreshToken.jti(), refreshToken.expiresIn());
 
-        return LoginTokens.of(accessToken, refreshToken, result);
+        return new TokenPair(accessToken, refreshToken);
     }
 }
