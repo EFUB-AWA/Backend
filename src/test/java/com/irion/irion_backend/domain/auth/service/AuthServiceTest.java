@@ -1,6 +1,7 @@
 package com.irion.irion_backend.domain.auth.service;
 
 import com.irion.irion_backend.domain.auth.dto.LoginTokens;
+import com.irion.irion_backend.domain.auth.dto.TokenPair;
 import com.irion.irion_backend.domain.auth.exception.AuthErrorCode;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.KakaoOAuthClient;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.dto.KakaoUserInfoResponse;
@@ -8,14 +9,18 @@ import com.irion.irion_backend.domain.auth.repository.RefreshTokenRepository;
 import com.irion.irion_backend.domain.user.entity.User;
 import com.irion.irion_backend.domain.user.service.UserService;
 import com.irion.irion_backend.global.error.BusinessException;
+import com.irion.irion_backend.global.security.jwt.IssuedToken;
 import com.irion.irion_backend.global.security.jwt.JwtProperties;
 import com.irion.irion_backend.global.security.jwt.JwtProvider;
 import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
+import io.jsonwebtoken.Jwt;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.SpringApplication;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -57,11 +62,12 @@ public class AuthServiceTest {
     private TokenBlacklistRepository tokenBlacklistRepository;
 
     private AuthService authService;
+    private JwtProvider jwtProvider;
 
     @BeforeEach
     void setUp() {
         // JwtProvider는 mock이 아닌 실제 객체 -> 발급된 토큰의 jti와 저장값 일치까지 검증
-        JwtProvider jwtProvider = new JwtProvider(
+        jwtProvider = new JwtProvider(
                 new JwtProperties(SECRET, Duration.ofMinutes(30), Duration.ofDays(14))
         );
         authService = new AuthService(kakaoOAuthClient, userService,
@@ -140,6 +146,99 @@ public class AuthServiceTest {
 
         then(userService).should(never()).createKakaoUser(anyLong(), anyString(), anyString(), any());
         verifyNoInteractions(refreshTokenRepository);
+    }
+
+    // ----- 토큰 재발급 -----
+    @Test
+    void 저장된_jti와_일치하면_새_토큰을_발급하고_새_jti로_교체한다() {
+        // given: 로그인 때 발급되어 Redis에 저장된 refresh
+        IssuedToken oldRefresh = jwtProvider.createRefreshToken(USER_ID);
+        given(refreshTokenRepository.findJti(USER_ID)).willReturn(Optional.of(oldRefresh.jti()));
+
+        // when
+        TokenPair tokens = authService.reissue(oldRefresh.token());
+
+        // then: 새 refresh는 jti가 바뀌었고, 그 jti로 Redis가 교체됨
+        assertThat(tokens.refreshToken().jti()).isNotEqualTo(oldRefresh.jti());
+        then(refreshTokenRepository).should()
+                .save(USER_ID, tokens.refreshToken().jti(), tokens.refreshToken().expiresIn());
+    }
+
+    @Test
+    void 쿠키_null_또는_공백일_경우_AUTH_REFRESH_TOKEN_NOT_FOUND() {
+        assertThatThrownBy(() -> authService.reissue(" "))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND);
+        assertThatThrownBy(() -> authService.reissue(null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND);
+
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+    @Test
+    void redis에_저장된_jti가_없으면_AUTH_REFRESH_TOKEN_NOT_FOUND() {
+        // given: 서명은 유효하지만 Redis에는 없음 (만료/로그아웃)
+        IssuedToken refresh = jwtProvider.createRefreshToken(USER_ID);
+        given(refreshTokenRepository.findJti(USER_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissue(refresh.token()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND);
+        then(refreshTokenRepository).should(never()).save(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void 저장된_jti와_다르면_refresh를_삭제하고_AUTH_REFRESH_TOKEN_MISMATCH() {
+        // given: 이미 재발급으로 교체되어 Redis에는 다른 jti가 있는 상황
+        IssuedToken usedRefresh = jwtProvider.createRefreshToken(USER_ID);
+        given(refreshTokenRepository.findJti(USER_ID)).willReturn(Optional.of("rotated-jti"));
+
+        // when & then
+        assertThatThrownBy(() -> authService.reissue(usedRefresh.token()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.AUTH_REFRESH_TOKEN_MISMATCH);
+
+        // 탈취 대응
+        then(refreshTokenRepository).should().delete(USER_ID);
+        then(refreshTokenRepository).should(never()).save(anyLong(), anyString(), any());
+    }
+
+    @Test
+    void access_토큰으로_재발급하면_AUTH_INVALID_TOKNE() {
+        // given: 서명은 유효하지만 타입이 access
+        IssuedToken access = jwtProvider.createAccessToken(USER_ID);
+
+        assertThatThrownBy(() -> authService.reissue(access.token()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AuthErrorCode.AUTH_INVALID_TOKEN);
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+
+    // ----- 로그아웃 -----
+    @Test
+    void 로그아웃하면_access_jti를_남은_시간만큼_블랙리스트에_올리고_refresh_삭제() {
+        // given
+        IssuedToken access = jwtProvider.createAccessToken(USER_ID);
+
+        // when
+        authService.logout(USER_ID, access.token());
+
+        // then
+        ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
+        then(tokenBlacklistRepository).should().add(eq(access.jti()), ttlCaptor.capture());
+        assertThat(ttlCaptor.getValue())
+                .isPositive()
+                .isLessThanOrEqualTo(Duration.ofMinutes(30));
+
+        then(refreshTokenRepository).should().delete(USER_ID);
     }
 
 
