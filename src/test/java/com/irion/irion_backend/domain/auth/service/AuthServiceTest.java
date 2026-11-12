@@ -10,6 +10,7 @@ import com.irion.irion_backend.domain.user.service.UserService;
 import com.irion.irion_backend.global.error.BusinessException;
 import com.irion.irion_backend.global.security.jwt.JwtProperties;
 import com.irion.irion_backend.global.security.jwt.JwtProvider;
+import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,9 @@ public class AuthServiceTest {
     @Mock
     private RefreshTokenRepository refreshTokenRepository;
 
+    @Mock
+    private TokenBlacklistRepository tokenBlacklistRepository;
+
     private AuthService authService;
 
     @BeforeEach
@@ -61,7 +65,7 @@ public class AuthServiceTest {
                 new JwtProperties(SECRET, Duration.ofMinutes(30), Duration.ofDays(14))
         );
         authService = new AuthService(kakaoOAuthClient, userService,
-                jwtProvider, refreshTokenRepository);
+                jwtProvider, refreshTokenRepository, tokenBlacklistRepository);
     }
 
     // 동시 가입 충돌 테스트

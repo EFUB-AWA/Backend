@@ -12,10 +12,13 @@ import com.irion.irion_backend.domain.user.service.UserService;
 import com.irion.irion_backend.global.error.BusinessException;
 import com.irion.irion_backend.global.security.jwt.IssuedToken;
 import com.irion.irion_backend.global.security.jwt.JwtProvider;
+import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+
+import java.time.Duration;
 
 
 @Service
@@ -26,6 +29,7 @@ public class AuthService {
     private final UserService userService;
     private final JwtProvider jwtProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final TokenBlacklistRepository tokenBlacklistRepository;
 
 
     // 로그인
@@ -81,6 +85,16 @@ public class AuthService {
         }
 
         return issueAndSave(userId);
+    }
+
+    // 로그아웃
+    public void logout(Long userId, String accessToken) {
+        Claims claims = jwtProvider.parseAccessToken(accessToken);
+        String jti = jwtProvider.getJti(claims);
+        Duration remainingValidity = jwtProvider.getRemainingValidity(claims);
+
+        tokenBlacklistRepository.add(jti, remainingValidity);
+        refreshTokenRepository.delete(userId);
     }
 
 
