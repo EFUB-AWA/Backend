@@ -2,6 +2,7 @@ package com.irion.irion_backend.domain.auth.service;
 
 import com.irion.irion_backend.domain.auth.dto.LoginResult;
 import com.irion.irion_backend.domain.auth.dto.LoginTokens;
+import com.irion.irion_backend.domain.auth.dto.ReissueTokens;
 import com.irion.irion_backend.domain.auth.exception.AuthErrorCode;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.KakaoOAuthClient;
 import com.irion.irion_backend.domain.auth.infrastructure.kakao.dto.KakaoUserInfoResponse;
@@ -11,9 +12,11 @@ import com.irion.irion_backend.domain.user.service.UserService;
 import com.irion.irion_backend.global.error.BusinessException;
 import com.irion.irion_backend.global.security.jwt.IssuedToken;
 import com.irion.irion_backend.global.security.jwt.JwtProvider;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +59,36 @@ public class AuthService {
             return new LoginResult(user, false);
         }
     }
+
+    // 토큰 재발급
+    public ReissueTokens reissue(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new BusinessException(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND);
+        }
+
+        Claims claims = jwtProvider.parseRefreshToken(refreshToken);
+        Long userId = jwtProvider.getUserId(claims);
+        String jti = jwtProvider.getJti(claims);
+
+        String savedJti = refreshTokenRepository.findJti(userId)
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.AUTH_REFRESH_TOKEN_NOT_FOUND));
+
+
+        // Redis에 저장된 RT가 jti와 다른 경우(이미 교체된 refresh가 다시 사용)
+        if (!savedJti.equals(jti)) {
+            refreshTokenRepository.delete(userId);
+            throw new BusinessException(AuthErrorCode.AUTH_REFRESH_TOKEN_MISMATCH);
+        }
+
+        IssuedToken newAccessToken = jwtProvider.createAccessToken(userId);
+        IssuedToken newRefreshToken = jwtProvider.createRefreshToken(userId);
+        refreshTokenRepository.save(userId, newRefreshToken.jti(), newRefreshToken.expiresIn());
+
+        return new ReissueTokens(newAccessToken, newRefreshToken);
+    }
+
+
+    // ----- helper -----
 
     private LoginTokens issueTokens(LoginResult result) {
         Long userId = result.user().getId();
