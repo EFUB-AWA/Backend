@@ -65,9 +65,6 @@ public class CandidateProperty extends BaseEntity {
     @Column(name = "monthly_management_fee", nullable = false)
     private Long monthlyManagementFee;
 
-    @Column(name = "other_initial_cost", nullable = false)
-    private Long otherInitialCost;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "mapping_status", nullable = false, length = 20)
     private MappingStatus mappingStatus;
@@ -75,8 +72,7 @@ public class CandidateProperty extends BaseEntity {
     @Builder
     private CandidateProperty(StartupCondition startupCondition , String name, String address, String addressDetail,
                                     Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
-                                    Long monthlyRent, Long keyMoney, Long monthlyManagementFee,
-                                    Long otherInitialCost) {
+                                    Long monthlyRent, Long keyMoney, Long monthlyManagementFee) {
         this.startupCondition = startupCondition;
         this.commercialArea = null;
         this.name = name;
@@ -89,7 +85,6 @@ public class CandidateProperty extends BaseEntity {
         this.monthlyRent = monthlyRent;
         this.keyMoney = keyMoney;
         this.monthlyManagementFee = monthlyManagementFee;
-        this.otherInitialCost = otherInitialCost;
         this.mappingStatus = MappingStatus.PENDING;
     }
 }

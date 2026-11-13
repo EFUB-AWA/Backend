@@ -50,11 +50,7 @@ public record PropertyCreateRequest(
 
         @NotNull(message = "관리비는 필수입니다.")
         @PositiveOrZero(message = "관리비는 0 이상이어야 합니다.")
-        Long monthlyManagementFee,
-
-        @NotNull(message = "기타 초기 비용은 필수입니다.")
-        @PositiveOrZero(message = "기타 초기 비용은 0 이상이어야 합니다.")
-        Long otherInitialCost
+        Long monthlyManagementFee
 ) {
 
     public CandidateProperty toEntity(StartupCondition startupCondition) {
@@ -70,7 +66,6 @@ public record PropertyCreateRequest(
                 .monthlyRent(monthlyRent)
                 .keyMoney(keyMoney)
                 .monthlyManagementFee(monthlyManagementFee)
-                .otherInitialCost(otherInitialCost)
                 .build();
     }
 }
