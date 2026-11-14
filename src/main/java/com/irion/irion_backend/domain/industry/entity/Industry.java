@@ -10,17 +10,17 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "industries")
-public class Industry extends BaseEntity {
+public class Industry{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "code_system", nullable = false)
-    private String codeSystem;
-
-    @Column(name = "code", nullable = false)
+    @Column(name = "code", nullable = false, unique = true)
     private String code;
+
+    @Column(name = "category", nullable = false)
+    private String category;
 
     @Column(name = "name", nullable = false)
     private String name;
