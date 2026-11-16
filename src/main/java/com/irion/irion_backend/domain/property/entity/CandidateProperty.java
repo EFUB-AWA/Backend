@@ -90,4 +90,14 @@ public class CandidateProperty extends BaseEntity {
         this.monthlyManagementFee = monthlyManagementFee;
         this.mappingStatus = MappingStatus.PENDING;
     }
+
+    public void updatePropertyDetails(String name, BigDecimal areaM2, Long deposit,
+                            Long monthlyRent, Long keyMoney, Long monthlyManagementFee) {
+        this.name = name;
+        this.areaM2 = areaM2;
+        this.deposit = deposit;
+        this.monthlyRent = monthlyRent;
+        this.keyMoney = keyMoney;
+        this.monthlyManagementFee = monthlyManagementFee;
+    }
 }

@@ -1,6 +1,7 @@
 package com.irion.irion_backend.domain.property.service;
 
 import com.irion.irion_backend.domain.property.dto.request.PropertyCreateRequest;
+import com.irion.irion_backend.domain.property.dto.request.PropertyUpdateRequest;
 import com.irion.irion_backend.domain.property.dto.response.PropertyCreateResponse;
 import com.irion.irion_backend.domain.property.dto.response.PropertyDetailResponse;
 import com.irion.irion_backend.domain.property.dto.response.PropertyListResponse;
@@ -50,6 +51,21 @@ public class PropertyService {
 
         // 요청자의 후보 매물인지 확인
         CandidateProperty property = findOwnedProperty(propertyId, requesterId);
+        return PropertyDetailResponse.from(property);
+    }
+
+    // 후보 매물 수정
+    @Transactional
+    public PropertyDetailResponse updateProperty(Long requesterId, Long propertyId, PropertyUpdateRequest request) {
+
+        // 요청자의 후보 매물인지 확인
+        CandidateProperty property = findOwnedProperty(propertyId, requesterId);
+
+        property.updatePropertyDetails(request.name(), request.areaM2(), request.deposit(),
+                request.monthlyRent(), request.keyMoney(), request.monthlyManagementFee());
+
+        propertyRepository.flush();
+
         return PropertyDetailResponse.from(property);
     }
 
