@@ -15,7 +15,10 @@ import java.math.BigDecimal;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "candidate_properties")
+@Table(name = "candidate_properties",
+        indexes = {
+                @Index(name = "idx_candidate_properties_startup_condition_id", columnList = "startup_condition_id")
+        })
 public class CandidateProperty extends BaseEntity {
 
     @Id
