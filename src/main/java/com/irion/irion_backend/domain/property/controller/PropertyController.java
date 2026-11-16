@@ -1,6 +1,7 @@
 package com.irion.irion_backend.domain.property.controller;
 
 import com.irion.irion_backend.domain.property.dto.request.PropertyCreateRequest;
+import com.irion.irion_backend.domain.property.dto.request.PropertyUpdateRequest;
 import com.irion.irion_backend.domain.property.dto.response.PropertyCreateResponse;
 import com.irion.irion_backend.domain.property.dto.response.PropertyDetailResponse;
 import com.irion.irion_backend.domain.property.dto.response.PropertyListResponse;
@@ -40,5 +41,13 @@ public class PropertyController {
     public ResponseEntity<PropertyDetailResponse> getProperty(@AuthMember Long requesterId,
                                                               @PathVariable("propertyId") Long propertyId) {
         return ResponseEntity.ok(propertyService.getProperty(requesterId, propertyId));
+    }
+
+    // 후보 매물 수정
+    @PatchMapping("/properties/{propertyId}")
+    public ResponseEntity<PropertyDetailResponse> updateProperty(@AuthMember Long requesterId,
+                                                                 @PathVariable("propertyId") Long propertyId,
+                                                                 @Valid @RequestBody PropertyUpdateRequest request) {
+        return ResponseEntity.ok(propertyService.updateProperty(requesterId, propertyId, request));
     }
 }
