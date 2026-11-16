@@ -53,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/industries",
-                                "/api/regions"
+                                "/api/regions",
+                                "/api/cost-benchmarks"
                         ).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

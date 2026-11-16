@@ -46,3 +46,7 @@ kakao:
 cookie:
   secure: ${COOKIE_SECURE:false}
   same-site: ${COOKIE_SAME_SITE:Lax}
+
+kosis:
+  api-key: ${KOSIS_API_KEY}
+  base-url: https://kosis.kr
