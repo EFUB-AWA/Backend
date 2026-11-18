@@ -3,8 +3,10 @@ package com.irion.irion_backend.domain.startupCondition.service;
 import com.irion.irion_backend.domain.industry.entity.Industry;
 import com.irion.irion_backend.domain.industry.repository.IndustryRepository;
 import com.irion.irion_backend.domain.startupCondition.dto.request.StartupConditionCreateRequest;
+import com.irion.irion_backend.domain.startupCondition.dto.request.StartupConditionUpdateRequest;
 import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionCreateResponse;
 import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionDetailResponse;
+import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionUpdateResponse;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode;
 import com.irion.irion_backend.domain.startupCondition.repository.StartupConditionRepository;
@@ -71,6 +73,35 @@ public class StartupConditionService {
                 .orElseThrow(() -> new BusinessException(StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND));
 
         return StartupConditionDetailResponse.from(condition);
+    }
+
+    // 내 창업 조건 수정
+    @Transactional
+    public StartupConditionUpdateResponse updateMyCondition(
+            Long requesterId,
+            StartupConditionUpdateRequest request
+    ) {
+        StartupCondition condition = startupConditionRepository.findByUser_Id(requesterId)
+                .orElseThrow(() -> new BusinessException(StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND));
+
+        Industry industry = industryRepository.findById(request.industryId())
+                .orElseThrow(() -> new BusinessException(GlobalErrorCode.INVALID_INPUT));
+
+        condition.update(
+                industry,
+                request.title(),
+                request.preferredRegionCode(),
+                request.totalCapital(),
+                request.availableCapital(),
+                request.loanAmount(),
+                request.monthlyLaborCost(),
+                request.costOfSalesRate(),
+                request.monthlyOtherOperatingCost()
+        );
+
+        startupConditionRepository.flush();
+
+        return StartupConditionUpdateResponse.from(condition);
     }
 
 }

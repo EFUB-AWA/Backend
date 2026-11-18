@@ -1,8 +1,10 @@
 package com.irion.irion_backend.domain.startupCondition.controller;
 
 import com.irion.irion_backend.domain.startupCondition.dto.request.StartupConditionCreateRequest;
+import com.irion.irion_backend.domain.startupCondition.dto.request.StartupConditionUpdateRequest;
 import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionCreateResponse;
 import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionDetailResponse;
+import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionUpdateResponse;
 import com.irion.irion_backend.domain.startupCondition.service.StartupConditionService;
 import com.irion.irion_backend.global.security.auth.AuthMember;
 import jakarta.validation.Valid;
@@ -31,6 +33,14 @@ public class StartupConditionController {
     @GetMapping("/me")
     public ResponseEntity<StartupConditionDetailResponse> getMyCondition(@AuthMember Long requesterId) {
         StartupConditionDetailResponse response = startupConditionService.getMyCondition(requesterId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    //창업 조건 수정
+    @PutMapping("/me")
+    public ResponseEntity<StartupConditionUpdateResponse> updateMyCondition(@AuthMember Long requesterId, @Valid @RequestBody StartupConditionUpdateRequest request) {
+        StartupConditionUpdateResponse response = startupConditionService.updateMyCondition(requesterId, request);
 
         return ResponseEntity.ok(response);
     }

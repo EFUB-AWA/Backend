@@ -78,4 +78,27 @@ public class StartupCondition extends BaseEntity {
         this.costOfSalesRate = costOfSalesRate;
         this.monthlyOtherOperatingCost = monthlyOtherOperatingCost;
     }
+
+    // 창업 조건 수정
+    public void update(
+            Industry industry,
+            String title,
+            String preferredRegionCode,
+            Long totalCapital,
+            Long availableCapital,
+            Long loanAmount,
+            Long monthlyLaborCost,
+            BigDecimal costOfSalesRate,
+            Long monthlyOtherOperatingCost
+    ) {
+        this.industry = industry;
+        this.title = title;
+        this.preferredRegionCode = preferredRegionCode;
+        this.totalCapital = totalCapital;
+        this.availableCapital = availableCapital;
+        this.loanAmount = loanAmount;
+        this.monthlyLaborCost = monthlyLaborCost;
+        this.costOfSalesRate = costOfSalesRate;
+        this.monthlyOtherOperatingCost = monthlyOtherOperatingCost;
+    }
 }
