@@ -4,6 +4,7 @@ import com.irion.irion_backend.domain.industry.entity.Industry;
 import com.irion.irion_backend.domain.industry.repository.IndustryRepository;
 import com.irion.irion_backend.domain.startupCondition.dto.request.StartupConditionCreateRequest;
 import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionCreateResponse;
+import com.irion.irion_backend.domain.startupCondition.dto.response.StartupConditionDetailResponse;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode;
 import com.irion.irion_backend.domain.startupCondition.repository.StartupConditionRepository;
@@ -21,13 +22,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class StartupConditionService {
 
-    private final StartupConditionRepository conditionRepository;
+    private final StartupConditionRepository startupConditionRepository;
     private final UserRepository userRepository;
     private final IndustryRepository industryRepository;
 
     // 요청자의 id와 일치하는 창업 조건 찾기
     public StartupCondition findOwnedCondition(Long conditionId, Long requesterId) {
-        return conditionRepository.findByIdAndUser_Id(conditionId, requesterId)
+        return startupConditionRepository.findByIdAndUser_Id(conditionId, requesterId)
                 .orElseThrow(() -> new BusinessException(StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND));
     }
 
@@ -35,7 +36,7 @@ public class StartupConditionService {
     public StartupConditionCreateResponse createCondition(Long requesterId, StartupConditionCreateRequest request) {
 
         //창업 조건 중복 등록 확인
-        if (conditionRepository.existsByUser_Id(requesterId)) {
+        if (startupConditionRepository.existsByUser_Id(requesterId)) {
             throw new BusinessException(StartupConditionErrorCode.STARTUP_CONDITION_ALREADY_EXISTS);
         }
 
@@ -58,9 +59,18 @@ public class StartupConditionService {
                 .monthlyOtherOperatingCost(request.monthlyOtherOperatingCost())
                 .build();
 
-        conditionRepository.save(condition);
+        startupConditionRepository.save(condition);
 
         return StartupConditionCreateResponse.from(condition);
+    }
+
+    //창업 조건 상세 조회
+    public StartupConditionDetailResponse getMyCondition(Long requesterId) {
+
+        StartupCondition condition = startupConditionRepository.findByUser_Id(requesterId)
+                .orElseThrow(() -> new BusinessException(StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND));
+
+        return StartupConditionDetailResponse.from(condition);
     }
 
 }
