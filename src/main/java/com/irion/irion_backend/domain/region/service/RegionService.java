@@ -1,8 +1,8 @@
-package com.irion.irion_backend.domain.Region.service;
+package com.irion.irion_backend.domain.region.service;
 
-import com.irion.irion_backend.domain.Region.dto.RegionListResponse;
-import com.irion.irion_backend.domain.Region.dto.RegionResponse;
-import com.irion.irion_backend.domain.Region.repository.RegionRepository;
+import com.irion.irion_backend.domain.region.dto.RegionListResponse;
+import com.irion.irion_backend.domain.region.dto.RegionResponse;
+import com.irion.irion_backend.domain.region.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

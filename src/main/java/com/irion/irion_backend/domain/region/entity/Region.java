@@ -1,4 +1,4 @@
-package com.irion.irion_backend.domain.Region.entity;
+package com.irion.irion_backend.domain.region.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
