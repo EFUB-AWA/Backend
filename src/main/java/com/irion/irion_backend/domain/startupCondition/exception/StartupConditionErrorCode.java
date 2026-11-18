@@ -7,9 +7,10 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum ConditionErrorCode implements ErrorCode {
+public enum StartupConditionErrorCode implements ErrorCode {
 
-    STARTUP_CONDITION_NOT_FOUND(HttpStatus.NOT_FOUND, "창업 조건을 찾을 수 없습니다.");
+    STARTUP_CONDITION_NOT_FOUND(HttpStatus.NOT_FOUND, "창업 조건을 찾을 수 없습니다."),
+    STARTUP_CONDITION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 등록된 창업 조건이 있습니다.");
 
     private final HttpStatus status;
     private final String message;
