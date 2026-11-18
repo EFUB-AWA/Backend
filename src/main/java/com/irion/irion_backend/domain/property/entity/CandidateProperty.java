@@ -1,6 +1,5 @@
 package com.irion.irion_backend.domain.property.entity;
 
-import com.irion.irion_backend.domain.commercialArea.entity.CommercialArea;
 import com.irion.irion_backend.domain.property.enums.MappingStatus;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
@@ -72,13 +71,14 @@ public class CandidateProperty extends BaseEntity {
 
     @Builder
     private CandidateProperty(StartupCondition startupCondition , String commercialAreaCode, String name, String address, String addressDetail,
-                                    Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
+                                    String regionCode, Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
                                     Long monthlyRent, Long keyMoney, Long monthlyManagementFee) {
         this.startupCondition = startupCondition;
         this.commercialAreaCode = commercialAreaCode;
         this.name = name;
         this.address = address;
         this.addressDetail = addressDetail;
+        this.regionCode = regionCode;
         this.latitude = latitude;
         this.longitude = longitude;
         this.areaM2 = areaM2;
@@ -86,7 +86,11 @@ public class CandidateProperty extends BaseEntity {
         this.monthlyRent = monthlyRent;
         this.keyMoney = keyMoney;
         this.monthlyManagementFee = monthlyManagementFee;
-        this.mappingStatus = MappingStatus.PENDING;
+        if (commercialAreaCode == null) {
+            this.mappingStatus = MappingStatus.FAILED;
+        } else {
+            this.mappingStatus = MappingStatus.MAPPED;
+        }
     }
 
     public void updatePropertyDetails(String name, BigDecimal areaM2, Long deposit,

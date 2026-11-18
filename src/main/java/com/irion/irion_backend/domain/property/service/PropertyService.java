@@ -1,5 +1,6 @@
 package com.irion.irion_backend.domain.property.service;
 
+import com.irion.irion_backend.domain.commercialArea.dto.CommercialAreaMatch;
 import com.irion.irion_backend.domain.commercialArea.service.CommercialAreaService;
 import com.irion.irion_backend.domain.property.dto.request.PropertyCreateRequest;
 import com.irion.irion_backend.domain.property.dto.request.PropertyUpdateRequest;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,9 +36,9 @@ public class PropertyService {
         StartupCondition condition = conditionService.findOwnedCondition(request.startupConditionId(), requesterId);
 
         // 위도·경도로 상권 코드 검색
-        String commercialAreaCode = commercialAreaService.findCommercialArea(request.latitude(), request.longitude());
+        Optional<CommercialAreaMatch> commercialArea = commercialAreaService.findCommercialArea(request.latitude(), request.longitude());
 
-        CandidateProperty property = request.toEntity(condition, commercialAreaCode);
+        CandidateProperty property = request.toEntity(condition, commercialArea);
         CandidateProperty saved = propertyRepository.save(property);
 
         return PropertyCreateResponse.from(saved);
