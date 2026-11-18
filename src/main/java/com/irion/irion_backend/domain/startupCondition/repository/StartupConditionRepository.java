@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface StartupConditionRepository extends JpaRepository<StartupCondition, Long> {
 
     Optional<StartupCondition> findByIdAndUser_Id(Long conditionId, Long userId);
+
+    boolean existsByUser_Id(Long userId);
 }
