@@ -1,7 +1,9 @@
 package com.irion.irion_backend.domain.commercialArea.service;
 
+import com.irion.irion_backend.domain.commercialArea.dto.CommercialAreaMatch;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.*;
 import org.locationtech.jts.io.geojson.GeoJsonReader;
 import org.springframework.core.io.ClassPathResource;
@@ -12,7 +14,9 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CommercialAreaService {
@@ -25,6 +29,7 @@ public class CommercialAreaService {
             String code,
             String name,
             String type,
+            String regionCode,
             Geometry geometry
     ) {}
 
@@ -45,62 +50,42 @@ public class CommercialAreaService {
                 String code = properties.get("TRDAR_CD").asText();
                 String name = properties.get("TRDAR_CD_N").asText();
                 String type = properties.get("TRDAR_SE_1").asText();
+                String regionCode = properties.get("SIGNGU_CD").asText();
 
                 Geometry geometry = reader.read(feature.get("geometry").toString());
 
-                areas.add(new CommercialArea(code, name, type, geometry));
+                areas.add(new CommercialArea(code, name, type, regionCode, geometry));
             }
         }
     }
 
-//    public String findCommercialArea(double latitude, double longitude) {
-//        Point point = geometryFactory.createPoint(new Coordinate(longitude, latitude));
-//
-//        String touristAreaCode = null;
-//
-//        for (CommercialArea area : areas) {
-//
-//            if (!area.geometry().covers(point)) {
-//                continue;
-//            }
-//
-//            // 일반 상권 우선 반환
-//            if (!"관광특구".equals(area.type())) {
-//                return area.code();
-//            }
-//
-//            // 관광특구는 후보로 보관
-//            touristAreaCode = area.code();
-//        }
-//
-//        return touristAreaCode;
-//    }
-
-    public String findCommercialArea(double latitude, double longitude) {
+    public Optional<CommercialAreaMatch> findCommercialArea(double latitude, double longitude) {
         Point point = geometryFactory.createPoint(
                 new Coordinate(longitude, latitude)
         );
 
-        System.out.println("상권 검색 시작: " + latitude + ", " + longitude);
-        System.out.println("로드된 상권 수: " + areas.size());
+        log.debug("상권 검색 시작: {}, {}", latitude, longitude);
+        log.debug("로드된 상권 수: {}", areas.size());
 
-        String touristAreaCode = null;
+        CommercialArea touristArea = null;
 
         for (CommercialArea area : areas) {
-            if (!area.geometry().covers(point)) {
-                continue;
-            }
-
-            System.out.println("매칭된 상권: "
-                    + area.name() + " / " + area.code());
+            if (!area.geometry().covers(point)) continue;
 
             if (!"관광특구".equals(area.type())) {
-                return area.code();
+                return Optional.of(toMatch(area));
             }
-
-            touristAreaCode = area.code();
+            touristArea = area;
         }
 
-        return touristAreaCode;
+        return Optional.ofNullable(touristArea).map(this::toMatch);
+    }
+
+    private CommercialAreaMatch toMatch(CommercialArea area) {
+        return new CommercialAreaMatch(
+                area.code(),
+                area.name(),
+                area.regionCode()
+        );
     }
 }
