@@ -1,7 +1,6 @@
 package com.irion.irion_backend.domain.commercialArea.service;
 
 import com.irion.irion_backend.domain.commercialArea.dto.CommercialAreaMatch;
-import com.irion.irion_backend.domain.commercialArea.entity.CommercialArea;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
