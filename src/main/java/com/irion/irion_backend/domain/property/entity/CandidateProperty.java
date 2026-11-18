@@ -30,10 +30,8 @@ public class CandidateProperty extends BaseEntity {
     @JoinColumn(name = "startup_condition_id", nullable = false)
     private StartupCondition startupCondition;
 
-    // TODO: 추후 상업 지역 도메인 생성 후 수정 예정
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "commercial_area_id")
-    private CommercialArea commercialArea;
+    @Column(name = "commercial_area_code", length = 20)
+    private String commercialAreaCode;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -73,11 +71,11 @@ public class CandidateProperty extends BaseEntity {
     private MappingStatus mappingStatus;
 
     @Builder
-    private CandidateProperty(StartupCondition startupCondition , String name, String address, String addressDetail,
+    private CandidateProperty(StartupCondition startupCondition , String commercialAreaCode, String name, String address, String addressDetail,
                                     Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
                                     Long monthlyRent, Long keyMoney, Long monthlyManagementFee) {
         this.startupCondition = startupCondition;
-        this.commercialArea = null;
+        this.commercialAreaCode = commercialAreaCode;
         this.name = name;
         this.address = address;
         this.addressDetail = addressDetail;

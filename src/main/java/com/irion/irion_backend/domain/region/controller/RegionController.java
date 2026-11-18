@@ -1,7 +1,7 @@
-package com.irion.irion_backend.domain.Region.controller;
+package com.irion.irion_backend.domain.region.controller;
 
-import com.irion.irion_backend.domain.Region.dto.RegionListResponse;
-import com.irion.irion_backend.domain.Region.service.RegionService;
+import com.irion.irion_backend.domain.region.dto.RegionListResponse;
+import com.irion.irion_backend.domain.region.service.RegionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

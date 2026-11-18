@@ -1,6 +1,6 @@
-package com.irion.irion_backend.domain.Region.dto;
+package com.irion.irion_backend.domain.region.dto;
 
-import com.irion.irion_backend.domain.Region.entity.Region;
+import com.irion.irion_backend.domain.region.entity.Region;
 
 public record RegionResponse(
         String code,

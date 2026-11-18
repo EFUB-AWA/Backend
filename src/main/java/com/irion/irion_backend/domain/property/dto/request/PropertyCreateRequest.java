@@ -53,9 +53,10 @@ public record PropertyCreateRequest(
         Long monthlyManagementFee
 ) {
 
-    public CandidateProperty toEntity(StartupCondition startupCondition) {
+    public CandidateProperty toEntity(StartupCondition startupCondition, String commercialAreaCode) {
         return CandidateProperty.builder()
                 .startupCondition(startupCondition)
+                .commercialAreaCode(commercialAreaCode)
                 .name(name)
                 .address(address)
                 .addressDetail(addressDetail)

@@ -1,5 +1,6 @@
 package com.irion.irion_backend.domain.property.service;
 
+import com.irion.irion_backend.domain.commercialArea.service.CommercialAreaService;
 import com.irion.irion_backend.domain.property.dto.request.PropertyCreateRequest;
 import com.irion.irion_backend.domain.property.dto.request.PropertyUpdateRequest;
 import com.irion.irion_backend.domain.property.dto.response.PropertyCreateResponse;
@@ -24,13 +25,18 @@ public class PropertyService {
 
     private final CandidatePropertyRepository propertyRepository;
     private final ConditionService conditionService;
+    private final CommercialAreaService commercialAreaService;
 
     // 후보 매물 등록
     @Transactional
     public PropertyCreateResponse registerProperty(Long requesterId, PropertyCreateRequest request) {
 
         StartupCondition condition = conditionService.findOwnedCondition(request.startupConditionId(), requesterId);
-        CandidateProperty property = request.toEntity(condition);
+
+        // 위도·경도로 상권 코드 검색
+        String commercialAreaCode = commercialAreaService.findCommercialArea(request.latitude(), request.longitude());
+
+        CandidateProperty property = request.toEntity(condition, commercialAreaCode);
         CandidateProperty saved = propertyRepository.save(property);
 
         return PropertyCreateResponse.from(saved);

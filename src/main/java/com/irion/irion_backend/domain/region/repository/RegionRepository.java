@@ -1,6 +1,6 @@
-package com.irion.irion_backend.domain.Region.repository;
+package com.irion.irion_backend.domain.region.repository;
 
-import com.irion.irion_backend.domain.Region.entity.Region;
+import com.irion.irion_backend.domain.region.entity.Region;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RegionRepository
