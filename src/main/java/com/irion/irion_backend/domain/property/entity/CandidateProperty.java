@@ -24,7 +24,6 @@ public class CandidateProperty extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // TODO: 추후 창업 조건 도메인 생성 후 수정 예정
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "startup_condition_id", nullable = false)
     private StartupCondition startupCondition;
