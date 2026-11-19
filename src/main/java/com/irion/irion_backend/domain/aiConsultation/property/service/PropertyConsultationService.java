@@ -29,14 +29,7 @@ public class PropertyConsultationService {
     // 요청자 소유의 propertyConsultation인지 확인
     private PropertyConsultation findOwnedPropertyConsultation(Long propertyConsultationId, Long requesterId) {
 
-        PropertyConsultation propertyConsultation = propertyConsultationRepository.findById(propertyConsultationId)
+        return propertyConsultationRepository.findOwnedById(propertyConsultationId, requesterId)
                 .orElseThrow(() -> new BusinessException(ConsultationErrorCode.CONSULTATION_NOT_FOUND));
-
-        Long ownerId = propertyConsultation.getPropertyAnalysis().getCandidateProperty().getStartupCondition().getUser().getId();
-        if (!ownerId.equals(requesterId)) {
-            throw new BusinessException(ConsultationErrorCode.CONSULTATION_NOT_FOUND);
-        }
-
-        return propertyConsultation;
     }
 }
