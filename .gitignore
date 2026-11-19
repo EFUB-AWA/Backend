@@ -92,3 +92,7 @@ docker-compose.override.yaml
 secrets/
 credentials.json
 service-account.json
+
+### 개발용 ###
+answer.md
+prompt.md

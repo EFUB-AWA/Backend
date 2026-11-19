@@ -1,4 +1,4 @@
-package com.irion.irion_backend.domain.Region.dto;
+package com.irion.irion_backend.domain.region.dto;
 
 import java.util.List;
 

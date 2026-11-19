@@ -1,10 +1,12 @@
 package com.irion.irion_backend.domain.property.dto.request;
 
+import com.irion.irion_backend.domain.commercialArea.dto.CommercialAreaMatch;
 import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import jakarta.validation.constraints.*;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 public record PropertyCreateRequest(
         @NotNull(message = "창업 조건 ID는 필수입니다.")
@@ -53,12 +55,14 @@ public record PropertyCreateRequest(
         Long monthlyManagementFee
 ) {
 
-    public CandidateProperty toEntity(StartupCondition startupCondition) {
+    public CandidateProperty toEntity(StartupCondition startupCondition, Optional<CommercialAreaMatch> commercialArea) {
         return CandidateProperty.builder()
                 .startupCondition(startupCondition)
+                .commercialAreaCode(commercialArea.map(CommercialAreaMatch::code).orElse(null))
                 .name(name)
                 .address(address)
                 .addressDetail(addressDetail)
+                .regionCode(commercialArea.map(CommercialAreaMatch::regionCode).orElse(null))
                 .latitude(latitude)
                 .longitude(longitude)
                 .areaM2(areaM2)

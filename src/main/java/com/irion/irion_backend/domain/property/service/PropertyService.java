@@ -1,5 +1,7 @@
 package com.irion.irion_backend.domain.property.service;
 
+import com.irion.irion_backend.domain.commercialArea.dto.CommercialAreaMatch;
+import com.irion.irion_backend.domain.commercialArea.service.CommercialAreaService;
 import com.irion.irion_backend.domain.property.dto.request.PropertyCreateRequest;
 import com.irion.irion_backend.domain.property.dto.request.PropertyUpdateRequest;
 import com.irion.irion_backend.domain.property.dto.response.PropertyCreateResponse;
@@ -9,13 +11,14 @@ import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.domain.property.exception.PropertyErrorCode;
 import com.irion.irion_backend.domain.property.repository.CandidatePropertyRepository;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
-import com.irion.irion_backend.domain.startupCondition.service.ConditionService;
+import com.irion.irion_backend.domain.startupCondition.service.StartupConditionService;
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,14 +26,19 @@ import java.util.List;
 public class PropertyService {
 
     private final CandidatePropertyRepository propertyRepository;
-    private final ConditionService conditionService;
+    private final StartupConditionService startupConditionService;
+    private final CommercialAreaService commercialAreaService;
 
     // 후보 매물 등록
     @Transactional
     public PropertyCreateResponse registerProperty(Long requesterId, PropertyCreateRequest request) {
 
-        StartupCondition condition = conditionService.findOwnedCondition(request.startupConditionId(), requesterId);
-        CandidateProperty property = request.toEntity(condition);
+        StartupCondition condition = startupConditionService.findOwnedCondition(request.startupConditionId(), requesterId);
+
+        // 위도·경도로 상권 코드 검색
+        Optional<CommercialAreaMatch> commercialArea = commercialAreaService.findCommercialArea(request.latitude(), request.longitude());
+
+        CandidateProperty property = request.toEntity(condition, commercialArea);
         CandidateProperty saved = propertyRepository.save(property);
 
         return PropertyCreateResponse.from(saved);
@@ -40,7 +48,7 @@ public class PropertyService {
     public PropertyListResponse getProperties(Long requesterId, Long conditionId) {
 
         // 요청자의 창업 조건인지 확인
-        StartupCondition condition = conditionService.findOwnedCondition(conditionId, requesterId);
+        StartupCondition condition = startupConditionService.findOwnedCondition(conditionId, requesterId);
 
         List<CandidateProperty> properties = propertyRepository.findByStartupConditionOrderByCreatedAtDesc(condition);
         return PropertyListResponse.from(properties);

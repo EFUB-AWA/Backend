@@ -1,6 +1,5 @@
 package com.irion.irion_backend.domain.property.entity;
 
-import com.irion.irion_backend.domain.commercialArea.entity.CommercialArea;
 import com.irion.irion_backend.domain.property.enums.MappingStatus;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
@@ -30,10 +29,8 @@ public class CandidateProperty extends BaseEntity {
     @JoinColumn(name = "startup_condition_id", nullable = false)
     private StartupCondition startupCondition;
 
-    // TODO: 추후 상업 지역 도메인 생성 후 수정 예정
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "commercial_area_id")
-    private CommercialArea commercialArea;
+    @Column(name = "commercial_area_code", length = 20)
+    private String commercialAreaCode;
 
     @Column(name = "name", nullable = false)
     private String name;
@@ -73,14 +70,15 @@ public class CandidateProperty extends BaseEntity {
     private MappingStatus mappingStatus;
 
     @Builder
-    private CandidateProperty(StartupCondition startupCondition , String name, String address, String addressDetail,
-                                    Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
+    private CandidateProperty(StartupCondition startupCondition , String commercialAreaCode, String name, String address, String addressDetail,
+                                    String regionCode, Double latitude, Double longitude, BigDecimal areaM2, Long deposit,
                                     Long monthlyRent, Long keyMoney, Long monthlyManagementFee) {
         this.startupCondition = startupCondition;
-        this.commercialArea = null;
+        this.commercialAreaCode = commercialAreaCode;
         this.name = name;
         this.address = address;
         this.addressDetail = addressDetail;
+        this.regionCode = regionCode;
         this.latitude = latitude;
         this.longitude = longitude;
         this.areaM2 = areaM2;
@@ -88,7 +86,11 @@ public class CandidateProperty extends BaseEntity {
         this.monthlyRent = monthlyRent;
         this.keyMoney = keyMoney;
         this.monthlyManagementFee = monthlyManagementFee;
-        this.mappingStatus = MappingStatus.PENDING;
+        if (commercialAreaCode == null) {
+            this.mappingStatus = MappingStatus.FAILED;
+        } else {
+            this.mappingStatus = MappingStatus.MAPPED;
+        }
     }
 
     public void updatePropertyDetails(String name, BigDecimal areaM2, Long deposit,
