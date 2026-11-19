@@ -1,7 +1,6 @@
 package com.irion.irion_backend.domain.analysis.service;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
-import com.irion.irion_backend.domain.commercialArea.entity.CommercialArea;
 import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.domain.property.enums.MappingStatus;
 import com.irion.irion_backend.domain.property.repository.CandidatePropertyRepository;
@@ -13,6 +12,9 @@ import com.irion.irion_backend.global.error.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -20,7 +22,7 @@ import java.util.Optional;
 
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.*;
 import static com.irion.irion_backend.domain.property.exception.PropertyErrorCode.PROPERTY_NOT_FOUND;
-import static com.irion.irion_backend.domain.startupCondition.exception.ConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
+import static com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -82,7 +84,7 @@ class AnalysisRequestValidatorTest {
 
     @Test
     void missingPropertyTakesPrecedenceOverMappingError() {
-        CandidateProperty first = property(10, condition(1, 7), MappingStatus.PENDING);
+        CandidateProperty first = property(10, condition(1, 7), MappingStatus.FAILED);
         when(properties.findAllById(List.of(10L, 11L))).thenReturn(List.of(first));
         expectError(request(10L, 11L), PROPERTY_NOT_FOUND);
     }
@@ -90,7 +92,7 @@ class AnalysisRequestValidatorTest {
     @Test
     void foreignProperty() {
         condition(1, 7);
-        CandidateProperty foreign = property(10, condition(2, 8), MappingStatus.PENDING);
+        CandidateProperty foreign = property(10, condition(2, 8), MappingStatus.FAILED);
         when(properties.findAllById(List.of(10L))).thenReturn(List.of(foreign));
         expectError(request(10L), ANALYSIS_ACCESS_DENIED);
     }
@@ -104,17 +106,21 @@ class AnalysisRequestValidatorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MappingStatus.class, names = {"PENDING", "FAILED"})
+    @NullSource
+    @EnumSource(value = MappingStatus.class, names = "FAILED")
     void incompleteMapping(MappingStatus status) {
         CandidateProperty property = property(10, condition(1, 7), status);
-        when(property.getCommercialArea()).thenReturn(mock(CommercialArea.class));
+        when(property.getCommercialAreaCode()).thenReturn("10001");
         when(properties.findAllById(List.of(10L))).thenReturn(List.of(property));
         expectError(request(10L), PROPERTY_MAPPING_NOT_COMPLETED);
     }
 
-    @Test
-    void mappedWithoutArea() {
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    void mappedWithoutAreaCode(String code) {
         CandidateProperty property = property(10, condition(1, 7), MappingStatus.MAPPED);
+        when(property.getCommercialAreaCode()).thenReturn(code);
         when(properties.findAllById(List.of(10L))).thenReturn(List.of(property));
         expectError(request(10L), PROPERTY_MAPPING_NOT_COMPLETED);
     }
@@ -124,9 +130,8 @@ class AnalysisRequestValidatorTest {
         StartupCondition condition = condition(1, 7);
         CandidateProperty a = property(10, condition, MappingStatus.MAPPED);
         CandidateProperty b = property(11, condition, MappingStatus.MAPPED);
-        CommercialArea area = mock(CommercialArea.class);
-        when(a.getCommercialArea()).thenReturn(area);
-        when(b.getCommercialArea()).thenReturn(area);
+        when(a.getCommercialAreaCode()).thenReturn("10001");
+        when(b.getCommercialAreaCode()).thenReturn("10002");
         AnalysisRunRequest request = request(11L, 10L, 11L);
         when(properties.findAllById(request.candidatePropertyIds())).thenReturn(List.of(a, b));
 

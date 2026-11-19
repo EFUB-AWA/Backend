@@ -10,6 +10,7 @@ import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.Objects;
 
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.*;
 import static com.irion.irion_backend.domain.property.exception.PropertyErrorCode.PROPERTY_NOT_FOUND;
-import static com.irion.irion_backend.domain.startupCondition.exception.ConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
+import static com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class AnalysisRequestValidator {
             }
         }
         for (CandidateProperty property : byId.values()) {
-            if (property.getMappingStatus() != MappingStatus.MAPPED || property.getCommercialArea() == null) {
+            if (property.getMappingStatus() != MappingStatus.MAPPED || !StringUtils.hasText(property.getCommercialAreaCode())) {
                 throw new BusinessException(PROPERTY_MAPPING_NOT_COMPLETED);
             }
         }
