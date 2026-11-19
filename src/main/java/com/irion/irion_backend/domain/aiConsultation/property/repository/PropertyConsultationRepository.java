@@ -10,7 +10,7 @@ import java.util.Optional;
 public interface PropertyConsultationRepository extends JpaRepository<PropertyConsultation, Long> {
 
     @Query("""
-        SELECT p FROM PropertyConsultation p JOIN p.propertyAnalysis pa 
+        SELECT p FROM PropertyConsultation p JOIN p.propertyAnalysis pa
         JOIN pa.candidateProperty c JOIN c.startupCondition s
         WHERE s.user.id = :requesterId and p.id = :propertyConsultationId
     """)
