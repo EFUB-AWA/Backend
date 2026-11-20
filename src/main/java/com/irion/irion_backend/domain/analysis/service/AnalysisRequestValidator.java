@@ -18,7 +18,8 @@ import java.util.Objects;
 
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.*;
 import static com.irion.irion_backend.domain.property.exception.PropertyErrorCode.PROPERTY_NOT_FOUND;
-import static com.irion.irion_backend.domain.startupCondition.exception.ConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
+import static com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
+
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +61,7 @@ public class AnalysisRequestValidator {
             }
         }
         for (CandidateProperty property : byId.values()) {
-            if (property.getMappingStatus() != MappingStatus.MAPPED || property.getCommercialArea() == null) {
+            if (property.getMappingStatus() != MappingStatus.MAPPED || property.getCommercialAreaCode() == null) {
                 throw new BusinessException(PROPERTY_MAPPING_NOT_COMPLETED);
             }
         }
