@@ -8,13 +8,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.*;
 
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SALES_QUARTER_NOT_READY;
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SEOUL_API_INVALID_RESPONSE;
 import static com.irion.irion_backend.domain.commercialStatistics.repository.CommercialStatisticsCacheRepository.salesField;
+import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableDecimal;
+import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableLong;
+import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readRequiredCode;
 
 @Service
 @RequiredArgsConstructor
@@ -131,56 +133,6 @@ public class CommercialSalesService {
 
     private void validateRowQuarter(JsonNode row, String quarterCode) {
         if (!quarterCode.equals(readRequiredCode(row, "STDR_YYQU_CD"))) {
-            throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-        }
-    }
-
-    private String readRequiredCode(JsonNode row, String fieldName) {
-        JsonNode field = row.path(fieldName);
-        if (!field.isTextual() && !field.isIntegralNumber()) {
-            throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-        }
-
-        String value = field.asText();
-        if (value.isBlank()) {
-            throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-        }
-        return value;
-    }
-
-    private BigDecimal readNullableDecimal(JsonNode row, String fieldName) {
-        JsonNode field = row.path(fieldName);
-        if (field.isMissingNode() || field.isNull()) {
-            return null;
-        }
-        if (field.isNumber()) {
-            return field.decimalValue();
-        }
-        if (!field.isTextual()) {
-            throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-        }
-
-        String value = field.asText().strip();
-        if (value.isEmpty()) {
-            return null;
-        }
-
-        try {
-            return new BigDecimal(value);
-        } catch (NumberFormatException e) {
-            throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-        }
-    }
-
-    private Long readNullableLong(JsonNode row, String fieldName) {
-        BigDecimal value = readNullableDecimal(row, fieldName);
-        if (value == null) {
-            return null;
-        }
-
-        try {
-            return value.longValueExact();
-        } catch (ArithmeticException e) {
             throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
         }
     }
