@@ -7,11 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SEOUL_API_INVALID_RESPONSE;
+import static com.irion.irion_backend.domain.commercialStatistics.repository.StatisticsDataset.STORES;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableDecimal;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableLong;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readRequiredCode;
@@ -20,7 +21,7 @@ import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulS
 @RequiredArgsConstructor
 public class CommercialStoreService {
 
-    private static final String SERVICE_NAME = "VwsmTrdarStorQq";
+    private static final String SERVICE_NAME = STORES.serviceName();
     private static final int PAGE_SIZE = 1000;
 
     private final SeoulOpenApiClient seoulOpenApiClient;
@@ -34,21 +35,19 @@ public class CommercialStoreService {
             throw new IllegalArgumentException("상권 코드와 업종 코드는 필수입니다.");
         }
 
-        List<StoreStatistics> matches = new ArrayList<>(1);
+        return Optional.ofNullable(collectAreaStatistics(quarterCode, commercialAreaCode).get(industryCode));
+    }
+
+    Map<String, StoreStatistics> collectAreaStatistics(String quarterCode, String commercialAreaCode) {
+        Map<String, StoreStatistics> statisticsByIndustry = new HashMap<>();
         seoulOpenApiClient.forEachPage(SERVICE_NAME, PAGE_SIZE, rows -> {
             for (JsonNode row : rows) {
                 if (!quarterCode.equals(readRequiredCode(row, "STDR_YYQU_CD"))
                         || !commercialAreaCode.equals(readRequiredCode(row, "TRDAR_CD"))) {
                     throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
                 }
-                if (!industryCode.equals(readRequiredCode(row, "SVC_INDUTY_CD"))) {
-                    continue;
-                }
-                if (!matches.isEmpty()) {
-                    throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
-                }
-
-                matches.add(new StoreStatistics(
+                String industryCode = readRequiredCode(row, "SVC_INDUTY_CD");
+                StoreStatistics statistics = new StoreStatistics(
                         quarterCode,
                         commercialAreaCode,
                         industryCode,
@@ -59,10 +58,13 @@ public class CommercialStoreService {
                         readNullableLong(row, "CLSBIZ_STOR_CO"),
                         readNullableDecimal(row, "OPBIZ_RT"),
                         readNullableDecimal(row, "CLSBIZ_RT")
-                ));
+                );
+                if (statisticsByIndustry.putIfAbsent(industryCode, statistics) != null) {
+                    throw new BusinessException(SEOUL_API_INVALID_RESPONSE);
+                }
             }
         }, quarterCode, commercialAreaCode);
 
-        return matches.stream().findFirst();
+        return statisticsByIndustry;
     }
 }

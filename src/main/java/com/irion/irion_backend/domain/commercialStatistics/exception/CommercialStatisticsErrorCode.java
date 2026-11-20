@@ -13,7 +13,8 @@ public enum CommercialStatisticsErrorCode implements ErrorCode {
     SEOUL_API_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "서울시 Open API 요청에 실패했습니다."),
     SEOUL_API_INVALID_RESPONSE(HttpStatus.BAD_GATEWAY, "서울시 Open API 응답 형식이 올바르지 않습니다."),
     COMMERCIAL_STATS_CACHE_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "상권 통계 캐시를 처리하지 못했습니다."),
-    SALES_QUARTER_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "조회할 수 있는 추정매출 분기가 준비되지 않았습니다.");
+    SALES_QUARTER_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "조회할 수 있는 추정매출 분기가 준비되지 않았습니다."),
+    STATISTICS_QUARTER_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "조회할 수 있는 상권 통계 분기가 준비되지 않았습니다.");
 
     private final HttpStatus status;
     private final String message;

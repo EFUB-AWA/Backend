@@ -14,6 +14,7 @@ import java.util.*;
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SALES_QUARTER_NOT_READY;
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SEOUL_API_INVALID_RESPONSE;
 import static com.irion.irion_backend.domain.commercialStatistics.repository.CommercialStatisticsCacheRepository.salesField;
+import static com.irion.irion_backend.domain.commercialStatistics.repository.StatisticsDataset.SALES;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableDecimal;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableLong;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readRequiredCode;
@@ -22,7 +23,7 @@ import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulS
 @RequiredArgsConstructor
 public class CommercialSalesService {
 
-    private static final String SERVICE_NAME = "VwsmTrdarSelngQq";
+    private static final String SERVICE_NAME = SALES.serviceName();
     private static final int PAGE_SIZE = 1000;
     private static final Duration MINIMUM_SALES_CACHE_TTL = Duration.ofDays(2);
 

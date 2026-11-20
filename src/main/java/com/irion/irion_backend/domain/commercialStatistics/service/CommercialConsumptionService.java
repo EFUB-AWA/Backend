@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SEOUL_API_INVALID_RESPONSE;
+import static com.irion.irion_backend.domain.commercialStatistics.repository.StatisticsDataset.CONSUMPTION;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableDecimal;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readRequiredCode;
 
@@ -19,7 +20,7 @@ import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulS
 @RequiredArgsConstructor
 public class CommercialConsumptionService {
 
-    private static final String SERVICE_NAME = "trdarNcmCnsmp";
+    private static final String SERVICE_NAME = CONSUMPTION.serviceName();
     private static final int PAGE_SIZE = 1000;
 
     private final SeoulOpenApiClient seoulOpenApiClient;
@@ -52,7 +53,7 @@ public class CommercialConsumptionService {
         return matches.stream().findFirst();
     }
 
-    private ConsumptionStatistics toStatistics(JsonNode row, String quarterCode, String commercialAreaCode) {
+    ConsumptionStatistics toStatistics(JsonNode row, String quarterCode, String commercialAreaCode) {
         return new ConsumptionStatistics(
                 quarterCode,
                 commercialAreaCode,

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static com.irion.irion_backend.domain.commercialStatistics.exception.CommercialStatisticsErrorCode.SEOUL_API_INVALID_RESPONSE;
+import static com.irion.irion_backend.domain.commercialStatistics.repository.StatisticsDataset.FLOATING_POPULATION;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readNullableLong;
 import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulStatisticsRow.readRequiredCode;
 
@@ -19,7 +20,7 @@ import static com.irion.irion_backend.domain.commercialStatistics.service.SeoulS
 @RequiredArgsConstructor
 public class CommercialFloatingPopulationService {
 
-    private static final String SERVICE_NAME = "VwsmTrdarFlpopQq";
+    private static final String SERVICE_NAME = FLOATING_POPULATION.serviceName();
     private static final int PAGE_SIZE = 1000;
 
     private final SeoulOpenApiClient seoulOpenApiClient;
@@ -52,7 +53,7 @@ public class CommercialFloatingPopulationService {
         return matches.stream().findFirst();
     }
 
-    private FloatingPopulationStatistics toStatistics(JsonNode row, String quarterCode, String commercialAreaCode) {
+    FloatingPopulationStatistics toStatistics(JsonNode row, String quarterCode, String commercialAreaCode) {
         return new FloatingPopulationStatistics(
                 quarterCode,
                 commercialAreaCode,
