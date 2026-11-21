@@ -9,7 +9,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.jdbc.Sql;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,5 +75,59 @@ public class ComparisonConsultationRepositoryTest {
         // when & then
         assertThat(comparisonConsultationRepository
                 .findOwnedById(99999L, OWNER_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("첫 페이지는 저장한 내 컨설팅을 id 내림차순으로 조회한다.")
+    void findSavedFirstPage_get_consultations() {
+        // when
+        List<ComparisonConsultation> consultationList = comparisonConsultationRepository
+                .findSavedFirstPage(OWNER_ID, PageRequest.of(0, 10));
+
+        // then
+        assertThat(consultationList)
+                .hasSize(5)
+                .extracting(ComparisonConsultation::getId)
+                .containsExactly(9010L, 9009L, 9008L, 9007L, 9001L);
+    }
+
+    @Test
+    @DisplayName("첫 페이지는 개수 제한이 적용된다.")
+    void findSavedFirstPage_get_list_of_size() {
+        // when
+        List<ComparisonConsultation> consultationList = comparisonConsultationRepository
+                .findSavedFirstPage(OWNER_ID, PageRequest.of(0, 3));
+
+        // then
+        assertThat(consultationList)
+                .hasSize(3)
+                .extracting(ComparisonConsultation::getId)
+                .containsExactly(9010L, 9009L, 9008L);
+    }
+
+    @Test
+    @DisplayName("다음 페이지는 커서보다 작은 id만 조회한다.")
+    void findSavedNextPage_get_id_less_than_cursor() {
+        // when
+        List<ComparisonConsultation> consultationList = comparisonConsultationRepository
+                .findSavedNextPage(OWNER_ID, 9009L, PageRequest.of(0, 10));
+
+        // then
+        assertThat(consultationList)
+                .extracting(ComparisonConsultation::getId)
+                .containsExactly(9008L, 9007L, 9001L);
+    }
+
+    @Test
+    @DisplayName("다른 회원은 내 저장본을 조회하지 못한다.")
+    void findSavedFirstPage_other_cannot_see_mine() {
+        // when
+        List<ComparisonConsultation> consultationList = comparisonConsultationRepository
+                .findSavedFirstPage(9002L, PageRequest.of(0, 10));
+
+        // then
+        assertThat(consultationList)
+                .extracting(ComparisonConsultation::getId)
+                .containsExactly(9006L);
     }
 }
