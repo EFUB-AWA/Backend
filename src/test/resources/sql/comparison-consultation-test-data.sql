@@ -82,3 +82,31 @@ VALUES
      '다른 회원의 비교 컨설팅', '다른 회원 설명', '다른 회원 장단점',
      'gpt-4o-mini', 'v1', true, now() - interval '1 day', now() - interval '1 day', NULL,
      now() - interval '1 day', now());
+
+-- ===== 목록 조회용 (A 저장본 추가: 9001 + 9007~9010 = 5개) =====
+
+INSERT INTO analysis_runs
+(id, startup_condition_id, title, status, candidate_property_ids, condition_snapshot,
+ created_at, updated_at)
+VALUES
+    (9009, 9001, '서대문구 비교 6', 'COMPLETED', '[9001, 9002]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
+    (9010, 9001, '서대문구 비교 7', 'COMPLETED', '[9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
+    (9011, 9001, '서대문구 비교 8', 'COMPLETED', '[9001, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
+    (9012, 9001, '서대문구 비교 9', 'COMPLETED', '[9001, 9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now());
+
+INSERT INTO comparison_ai_consultations
+(id, analysis_run_id, property_snapshots, status, summary, description, pros_and_cons,
+ model_name, prompt_version, is_saved, completed_at, saved_at, expires_at, created_at, updated_at)
+VALUES
+    (9007, 9009, '[{"propertyId":9001,"name":"이대 정문 1층"},{"propertyId":9002,"name":"신촌역 앞"}]'::jsonb,
+     'COMPLETED', '목록용 요약 7', '목록용 설명 7', '목록용 장단점 7',
+     'gpt-4o-mini', 'v1', true, now() - interval '4 day', now() - interval '4 day', NULL, now() - interval '4 day', now()),
+    (9008, 9010, '[{"propertyId":9002,"name":"신촌역 앞"},{"propertyId":9003,"name":"연대 동문"}]'::jsonb,
+     'COMPLETED', '목록용 요약 8', '목록용 설명 8', '목록용 장단점 8',
+     'gpt-4o-mini', 'v1', true, now() - interval '3 day', now() - interval '3 day', NULL, now() - interval '3 day', now()),
+    (9009, 9011, '[{"propertyId":9001,"name":"이대 정문 1층"},{"propertyId":9003,"name":"연대 동문"}]'::jsonb,
+     'COMPLETED', '목록용 요약 9', '목록용 설명 9', '목록용 장단점 9',
+     'gpt-4o-mini', 'v1', true, now() - interval '2 day', now() - interval '2 day', NULL, now() - interval '2 day', now()),
+    (9010, 9012, '[{"propertyId":9001,"name":"이대 정문 1층"},{"propertyId":9002,"name":"신촌역 앞"},{"propertyId":9003,"name":"연대 동문"}]'::jsonb,
+     'COMPLETED', '목록용 요약 10', '목록용 설명 10', '목록용 장단점 10',
+     'gpt-4o-mini', 'v1', true, now() - interval '1 day', now() - interval '1 day', NULL, now() - interval '1 day', now());
