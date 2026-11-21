@@ -13,6 +13,7 @@ CREATE TABLE public.analysis_runs (
     title varchar(255),
     status varchar(20) NOT NULL,
     candidate_property_ids jsonb NOT NULL,
+    property_snapshots jsonb NOT NULL,
     condition_snapshot jsonb NOT NULL,
     assumptions_snapshot jsonb,
     calculation_version varchar(255),
@@ -23,6 +24,9 @@ CREATE TABLE public.analysis_runs (
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT fk_analysis_runs_startup_condition FOREIGN KEY (startup_condition_id)
         REFERENCES public.startup_conditions(id),
+    CONSTRAINT ck_analysis_runs_property_snapshots CHECK (
+        jsonb_typeof(property_snapshots) = 'array' AND property_snapshots <> '[]'::jsonb
+    ),
     CONSTRAINT ck_analysis_runs_status CHECK (status IN ('PROCESSING', 'COMPLETED', 'FAILED'))
 );
 CREATE INDEX idx_analysis_runs_startup_condition_id ON public.analysis_runs (startup_condition_id);
