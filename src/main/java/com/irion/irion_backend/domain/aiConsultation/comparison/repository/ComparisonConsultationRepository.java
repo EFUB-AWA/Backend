@@ -50,4 +50,11 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
     """)
     int updateSaved(@Param("id") Long consultationId, @Param("now") LocalDateTime now,
                     @Param("status") ConsultationStatus status);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+        DELETE FROM ComparisonConsultation c
+        WHERE c.saved = false AND c.expiresAt < :now
+    """)
+    int deleteExpired(@Param("now") LocalDateTime now);
 }
