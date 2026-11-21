@@ -20,7 +20,7 @@ import java.util.Optional;
 
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.*;
 import static com.irion.irion_backend.domain.property.exception.PropertyErrorCode.PROPERTY_NOT_FOUND;
-import static com.irion.irion_backend.domain.startupCondition.exception.ConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
+import static com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -82,7 +82,7 @@ class AnalysisRequestValidatorTest {
 
     @Test
     void missingPropertyTakesPrecedenceOverMappingError() {
-        CandidateProperty first = property(10, condition(1, 7), MappingStatus.PENDING);
+        CandidateProperty first = property(10, condition(1, 7), MappingStatus.FAILED);
         when(properties.findAllById(List.of(10L, 11L))).thenReturn(List.of(first));
         expectError(request(10L, 11L), PROPERTY_NOT_FOUND);
     }
@@ -90,7 +90,7 @@ class AnalysisRequestValidatorTest {
     @Test
     void foreignProperty() {
         condition(1, 7);
-        CandidateProperty foreign = property(10, condition(2, 8), MappingStatus.PENDING);
+        CandidateProperty foreign = property(10, condition(2, 8), MappingStatus.FAILED);
         when(properties.findAllById(List.of(10L))).thenReturn(List.of(foreign));
         expectError(request(10L), ANALYSIS_ACCESS_DENIED);
     }
@@ -103,12 +103,12 @@ class AnalysisRequestValidatorTest {
         expectError(request(10L), INVALID_ANALYSIS_REQUEST);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = MappingStatus.class, names = {"PENDING", "FAILED"})
-    void incompleteMapping(MappingStatus status) {
-        CandidateProperty property = property(10, condition(1, 7), status);
-        when(property.getCommercialArea()).thenReturn(mock(CommercialArea.class));
+    @Test
+    void incompleteMapping() {
+        CandidateProperty property = property(10, condition(1, 7), MappingStatus.FAILED);
+        when(property.getCommercialAreaCode()).thenReturn("3110008");
         when(properties.findAllById(List.of(10L))).thenReturn(List.of(property));
+
         expectError(request(10L), PROPERTY_MAPPING_NOT_COMPLETED);
     }
 
@@ -124,9 +124,8 @@ class AnalysisRequestValidatorTest {
         StartupCondition condition = condition(1, 7);
         CandidateProperty a = property(10, condition, MappingStatus.MAPPED);
         CandidateProperty b = property(11, condition, MappingStatus.MAPPED);
-        CommercialArea area = mock(CommercialArea.class);
-        when(a.getCommercialArea()).thenReturn(area);
-        when(b.getCommercialArea()).thenReturn(area);
+        when(a.getCommercialAreaCode()).thenReturn("3110008");
+        when(b.getCommercialAreaCode()).thenReturn("3110008");
         AnalysisRunRequest request = request(11L, 10L, 11L);
         when(properties.findAllById(request.candidatePropertyIds())).thenReturn(List.of(a, b));
 
