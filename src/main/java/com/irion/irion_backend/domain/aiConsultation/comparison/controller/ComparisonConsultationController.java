@@ -2,6 +2,7 @@ package com.irion.irion_backend.domain.aiConsultation.comparison.controller;
 
 import com.irion.irion_backend.domain.aiConsultation.comparison.dto.response.ComparisonConsultationDetailResponse;
 import com.irion.irion_backend.domain.aiConsultation.comparison.dto.response.ComparisonConsultationListResponse;
+import com.irion.irion_backend.domain.aiConsultation.comparison.dto.response.ComparisonConsultationSaveResponse;
 import com.irion.irion_backend.domain.aiConsultation.comparison.service.ComparisonConsultationService;
 import com.irion.irion_backend.global.security.auth.AuthMember;
 import jakarta.validation.constraints.Max;
@@ -30,5 +31,11 @@ public class ComparisonConsultationController {
                                                                                          @Min(1) @Max(50) @RequestParam(required = false, defaultValue = "10", name = "size") int size) {
         return ResponseEntity.ok(comparisonConsultationService
                 .getComparisonConsultations(requesterId, cursor, size));
+    }
+
+    @PostMapping("/{comparisonConsultId}/save")
+    public ResponseEntity<ComparisonConsultationSaveResponse> saveComparisonConsultation(@AuthMember Long requesterId,
+                                                                                         @PathVariable("comparisonConsultId") Long comparisonConsultationId) {
+        return ResponseEntity.ok(comparisonConsultationService.saveComparisonConsultation(requesterId, comparisonConsultationId));
     }
 }

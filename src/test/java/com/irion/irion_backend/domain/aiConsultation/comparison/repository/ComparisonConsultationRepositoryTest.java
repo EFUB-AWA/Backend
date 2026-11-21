@@ -1,5 +1,6 @@
 package com.irion.irion_backend.domain.aiConsultation.comparison.repository;
 
+import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
 import com.irion.irion_backend.domain.aiConsultation.comparison.entity.ComparisonConsultation;
 import com.irion.irion_backend.domain.aiConsultation.comparison.entity.PropertySnapshot;
 import com.irion.irion_backend.global.config.TestcontainersConfig;
@@ -11,7 +12,10 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.jdbc.Sql;
+import org.springframework.test.context.jdbc.SqlMergeMode;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,6 +31,8 @@ public class ComparisonConsultationRepositoryTest {
 
     private static final Long OWNER_ID = 9001L;
     private static final Long COMPLETED_CONSULTATION_ID = 9001L;
+
+    // ----- findOwnedById ----- //
 
     @Test
     @DisplayName("COMPLETED이면 jsonb 후보매물 리스트가 조회된다.")
@@ -76,6 +82,9 @@ public class ComparisonConsultationRepositoryTest {
         assertThat(comparisonConsultationRepository
                 .findOwnedById(99999L, OWNER_ID)).isEmpty();
     }
+
+
+    // ----- findSavedFirstPage / findSavedNextPage ----- //
 
     @Test
     @DisplayName("첫 페이지는 저장한 내 컨설팅을 id 내림차순으로 조회한다.")
@@ -129,5 +138,89 @@ public class ComparisonConsultationRepositoryTest {
         assertThat(consultationList)
                 .extracting(ComparisonConsultation::getId)
                 .containsExactly(9006L);
+    }
+
+
+    // ----- updateSaved ----- //
+
+    @Test
+    @DisplayName("저장 가능한 컨설팅은 1행이 변경되고 저장 상태가 된다.")
+    void updateSaved_success() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int updated = comparisonConsultationRepository.updateSaved(9002L, now, ConsultationStatus.COMPLETED);
+        ComparisonConsultation consultation = comparisonConsultationRepository.findById(9002L).orElseThrow();
+
+        // then
+        assertThat(updated).isEqualTo(1);
+        assertThat(consultation.isSaved()).isTrue();
+        assertThat(consultation.getSavedAt()).isEqualTo(now);
+        assertThat(consultation.getUpdatedAt()).isEqualTo(now);
+    }
+
+    @Test
+    @DisplayName("이미 저장된 컨설팅은 변경되지 않는다.")
+    void updatedSaved_already_saved_not_changed() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int updated = comparisonConsultationRepository.updateSaved(9001L, now, ConsultationStatus.COMPLETED);
+
+        // then
+        assertThat(updated).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("만료된 컨설팅은 변경되지 않는다.")
+    void updateSaved_expired_not_saved() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int updated = comparisonConsultationRepository.updateSaved(9003L, now, ConsultationStatus.COMPLETED);
+
+        // then
+        assertThat(updated).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("생성 중인 컨설팅은 변경되지 않는다.")
+    void updateSaved_pending_not_saved() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int updated = comparisonConsultationRepository.updateSaved(9004L, now, ConsultationStatus.COMPLETED);
+
+        // then
+        assertThat(updated).isEqualTo(0);
+    }
+
+
+    // ----- deleteExpired ----- //
+
+    @Test
+    @DisplayName("저장하지 않고 만료된 컨설팅만 삭제된다.")
+    void deleteExpired_success() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int deleted = comparisonConsultationRepository.deleteExpired(now);
+
+        // then
+        assertThat(deleted).isEqualTo(1);
+        assertThat(comparisonConsultationRepository.existsById(9003L)).isFalse();
+        assertThat(comparisonConsultationRepository.existsById(9001L)).isTrue();
+        assertThat(comparisonConsultationRepository.existsById(9002L)).isTrue();
+        assertThat(comparisonConsultationRepository.existsById(9004L)).isTrue();
+        assertThat(comparisonConsultationRepository.existsById(9005L)).isTrue();
+    }
+
+    @Test
+    @SqlMergeMode(SqlMergeMode.MergeMode.MERGE)
+    @Sql("/sql/comparison-consultation-saved-expired.sql")
+    @DisplayName("저장된 컨설팅은 만료 시각이 지나도 삭제되지 않는다.")
+    void deleteExpired_saved_not_deleted() {
+        // when
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        int deleted = comparisonConsultationRepository.deleteExpired(now);
+
+        // then
+        assertThat(deleted).isEqualTo(1);
+        assertThat(comparisonConsultationRepository.existsById(9012L)).isTrue();
     }
 }
