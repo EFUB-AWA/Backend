@@ -51,6 +51,13 @@ kosis:
   api-key: ${KOSIS_API_KEY}
   base-url: https://kosis.kr
 
+consultation:
+  ai:
+    url: "${CONSULTATION_AI_URL:}"
+    key: "${CONSULTATION_AI_API_KEY:}"
+    model: "${CONSULTATION_AI_MODEL:}"
+    timeout: "${CONSULTATION_AI_TIMEOUT:30s}"
+
 seoul-open-api:
   api-key: "${SEOUL_OPEN_API_KEY:}"
   base-url: "${SEOUL_OPEN_API_BASE_URL:http://openapi.seoul.go.kr:8088}"

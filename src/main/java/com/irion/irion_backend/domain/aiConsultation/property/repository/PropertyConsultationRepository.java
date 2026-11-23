@@ -9,6 +9,8 @@ import java.util.Optional;
 
 public interface PropertyConsultationRepository extends JpaRepository<PropertyConsultation, Long> {
 
+    Optional<PropertyConsultation> findByPropertyAnalysis_Id(Long propertyAnalysisId);
+
     @Query("""
         SELECT p FROM PropertyConsultation p JOIN p.propertyAnalysis pa
         JOIN pa.candidateProperty c JOIN c.startupCondition s
