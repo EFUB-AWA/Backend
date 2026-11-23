@@ -2,6 +2,9 @@ package com.irion.irion_backend.domain.analysis.repository;
 
 import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
+import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
+import com.irion.irion_backend.domain.analysis.service.AnalysisFailureService;
+import com.irion.irion_backend.domain.analysis.service.AnalysisResultService;
 import com.irion.irion_backend.domain.analysis.service.AnalysisService;
 import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
@@ -12,6 +15,11 @@ import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.domain.user.entity.User;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,6 +28,7 @@ import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -127,6 +136,106 @@ class AnalysisRunRepositoryIntegrationTest {
                 Integer.class, condition.getId()));
         assertEquals(0, jdbc.queryForObject("select count(*) from analysis_runs where startup_condition_id = ?",
                 Integer.class, condition.getId()));
+    }
+
+    @Nested
+    class ResultTransactions {
+        @Autowired private AnalysisResultService resultService;
+        @Autowired private AnalysisFailureService failureService;
+        @Autowired private PropertyAnalysisRepository results;
+        private Long runId, first, second, conditionId, userId, industryId;
+        private final LocalDateTime cutoff = LocalDateTime.of(2025, 1, 1, 0, 0);
+
+        @BeforeEach
+        void commitInputForIndependentTransactions() {
+            var condition = persistCondition();
+            conditionId = condition.getId();
+            userId = condition.getUser().getId();
+            industryId = condition.getIndustry().getId();
+            first = persistProperty(condition, "first");
+            second = persistProperty(condition, "second");
+            runId = service.start(userId, new AnalysisRunRequest(conditionId, List.of(second, first), "results"))
+                    .analysisRunId();
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+        }
+
+        @AfterEach
+        void removeCommittedFixture() {
+            TestTransaction.start();
+            jdbc.update("delete from property_analyses where analysis_run_id = ?", runId);
+            jdbc.update("delete from analysis_runs where id = ?", runId);
+            jdbc.update("delete from candidate_properties where startup_condition_id = ?", conditionId);
+            jdbc.update("delete from startup_conditions where id = ?", conditionId);
+            jdbc.update("delete from users where id = ?", userId);
+            jdbc.update("delete from industries where id = ?", industryId);
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+        }
+
+        private CalculatedPropertyResult result(Long id, String grade) {
+            return new CalculatedPropertyResult(id, 111L, 22L, new BigDecimal("0.30"), 33L, 44L,
+                    "test status", 55L, 66L, new BigDecimal("0.80"), grade, 1, "test reason");
+        }
+
+        private void complete(List<CalculatedPropertyResult> rows) {
+            resultService.complete(runId, rows, Map.of("source", "test"), "test-v1", cutoff, 3);
+        }
+
+        @Test
+        void storesSnapshotAndMetadataOnceAndPreservesCompletedState() {
+            jdbc.update("update candidate_properties set monthly_rent = 999 where id = ?", first);
+            var rows = List.of(result(second, "second grade"), result(first, "first grade"));
+            complete(rows);
+            complete(rows);
+            failureService.fail(runId, new IllegalStateException("late failure"));
+            var completed = repository.findById(runId).orElseThrow();
+            assertEquals(AnalysisStatus.COMPLETED, completed.getStatus());
+            assertEquals(Map.of("source", "test"), completed.getAssumptionsSnapshot());
+            assertEquals("test-v1", completed.getCalculationVersion());
+            assertEquals(cutoff, completed.getDataCutoffAt());
+            assertEquals(3, completed.getHorizonMonths());
+            var stored = results.findByAnalysisRun_Id(runId);
+            assertEquals(2, stored.size());
+            for (var row : stored) {
+                var snapshot = row.getPropertySnapshot();
+                assertEquals(row.getCandidateProperty().getId().longValue(),
+                        ((Number) snapshot.get("candidatePropertyId")).longValue());
+                assertEquals(snapshot.get("name") + " grade", row.getSafetyGrade());
+                assertEquals(20, snapshot.get("monthlyRent"));
+                assertEquals("48.20", snapshot.get("areaM2"));
+                assertEquals(111L, row.getExpectedMonthlySales());
+            }
+        }
+
+        @Test
+        void secondInsertFailureRollsBackFirstRowAndCommitsFailureSeparately() {
+            assertThrows(DataIntegrityViolationException.class,
+                    () -> complete(List.of(result(second, "valid"), result(first, "x".repeat(256)))));
+            complete(List.of(result(second, "valid"), result(first, "valid")));
+            failureService.fail(runId, new IllegalStateException("retry"));
+            assertFailedWithoutRows();
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"missing", "reordered", "null value"})
+        void refusesIncompleteOrUnmatchedResults(String invalid) {
+            var rows = switch (invalid) {
+                case "missing" -> List.of(result(second, "test"));
+                case "reordered" -> List.of(result(first, "test"), result(second, "test"));
+                default -> List.of(result(second, "test"), result(first, null));
+            };
+            assertThrows(RuntimeException.class, () -> complete(rows));
+            assertFailedWithoutRows();
+        }
+
+        private void assertFailedWithoutRows() {
+            var run = repository.findById(runId).orElseThrow();
+            assertEquals(AnalysisStatus.FAILED, run.getStatus());
+            assertNull(run.getCompletedAt());
+            assertNull(run.getCalculationVersion());
+            assertEquals(0, results.findByAnalysisRun_Id(runId).size());
+        }
     }
 
     private Long persistProperty(StartupCondition condition, String name) {
