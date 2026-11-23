@@ -29,10 +29,19 @@ public class PropertyConsultationService {
         if (reservation.input() == null) {
             return new Creation(false, reservation.detail());
         }
+        return new Creation(true, generate(reservation));
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PropertyConsultationDetailResponse retry(Long requesterId, Long consultationId, Long analysisId) {
+        return generate(transactions.reserveRetry(requesterId, consultationId, analysisId));
+    }
+
+    private PropertyConsultationDetailResponse generate(PropertyConsultationTransactions.Reservation reservation) {
         Long id = reservation.detail().propertyConsultId();
         try {
             var result = ai.generate(reservation.input());
-            return new Creation(true, transactions.complete(id, result));
+            return transactions.complete(id, result);
         } catch (RuntimeException cause) {
             transactions.fail(id);
             if (cause instanceof BusinessException business) {

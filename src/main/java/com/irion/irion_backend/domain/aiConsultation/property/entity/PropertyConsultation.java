@@ -1,6 +1,8 @@
 package com.irion.irion_backend.domain.aiConsultation.property.entity;
 
 import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
+import com.irion.irion_backend.domain.aiConsultation.common.exception.ConsultationErrorCode;
+import com.irion.irion_backend.global.error.BusinessException;
 import com.irion.irion_backend.domain.analysis.entity.PropertyAnalysis;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
 import jakarta.persistence.*;
@@ -73,6 +75,14 @@ public class PropertyConsultation extends BaseEntity {
         this.promptVersion = promptVersion;
         this.completedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
         this.status = ConsultationStatus.COMPLETED;
+    }
+
+    public void beginRetry() {
+        if (status != ConsultationStatus.FAILED) {
+            throw new BusinessException(ConsultationErrorCode.CONSULTATION_NOT_RETRYABLE);
+        }
+        completedAt = null;
+        status = ConsultationStatus.PENDING;
     }
 
     public void fail() {
