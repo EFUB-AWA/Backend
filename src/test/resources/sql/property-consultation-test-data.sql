@@ -167,16 +167,34 @@ VALUES
 
 -- 분석 실행 (회원별 1회)
 
+-- 요청 ID 순서대로 원본 매물에서 PropertySnapshotV1 배열을 만든다.
+CREATE FUNCTION pg_temp.fixture_property_snapshots(requested_ids jsonb)
+RETURNS jsonb LANGUAGE sql STABLE
+RETURN (
+    SELECT jsonb_agg(jsonb_build_object(
+        'schemaVersion', 1, 'candidatePropertyId', p.id,
+        'name', p.name, 'address', p.address, 'addressDetail', p.address_detail,
+        'latitude', p.latitude, 'longitude', p.longitude, 'areaM2', p.area_m2::text,
+        'deposit', p.deposit, 'monthlyRent', p.monthly_rent, 'keyMoney', p.key_money,
+        'monthlyManagementFee', p.monthly_management_fee, 'regionCode', p.region_code,
+        'mappingStatus', p.mapping_status, 'commercialAreaCode', p.commercial_area_code
+    ) ORDER BY requested.position)
+    FROM jsonb_array_elements_text(requested_ids) WITH ORDINALITY AS requested(id, position)
+    JOIN candidate_properties p ON p.id = requested.id::bigint
+);
+
+WITH runs (id, startup_condition_id, status, candidate_property_ids, condition_snapshot) AS (
+    VALUES
+        (9001, 9001, 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
+         '{"title":"서대문구 카페 창업","totalCapital":150000000,"availableCapital":100000000}'::jsonb),
+        (9002, 9002, 'COMPLETED', '[9004]'::jsonb,
+         '{"title":"마포구 카페 창업","totalCapital":200000000,"availableCapital":120000000}'::jsonb)
+)
 INSERT INTO analysis_runs
-(id, startup_condition_id, status, candidate_property_ids, condition_snapshot,
- created_at, updated_at)
-VALUES
-    (9001, 9001, 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
-     '{"title":"서대문구 카페 창업","totalCapital":150000000,"availableCapital":100000000}'::jsonb,
-     now(), now()),
-    (9002, 9002, 'COMPLETED', '[9004]'::jsonb,
-     '{"title":"마포구 카페 창업","totalCapital":200000000,"availableCapital":120000000}'::jsonb,
-     now(), now());
+(id, startup_condition_id, status, candidate_property_ids, property_snapshots, condition_snapshot, created_at, updated_at)
+SELECT id, startup_condition_id, status, candidate_property_ids,
+       pg_temp.fixture_property_snapshots(candidate_property_ids), condition_snapshot, now(), now()
+FROM runs;
 
 -- 매물 분석 (매물당 1개)
 INSERT INTO property_analyses
