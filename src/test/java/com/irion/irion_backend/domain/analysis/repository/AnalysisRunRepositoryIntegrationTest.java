@@ -1,6 +1,8 @@
 package com.irion.irion_backend.domain.analysis.repository;
 
 import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
+import com.irion.irion_backend.domain.analysis.calculation.FinancialCalculator;
+import com.irion.irion_backend.domain.analysis.service.AnalysisWorker;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
 import com.irion.irion_backend.domain.analysis.service.AnalysisFailureService;
@@ -25,9 +27,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.transaction.TestTransaction;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +42,9 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
@@ -48,6 +57,11 @@ class AnalysisRunRepositoryIntegrationTest {
     @Autowired private EntityManager entityManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private AnalysisService service;
+
+    @Test
+    void defaultContextHasNoAnalysisWorker(@Autowired ObjectProvider<AnalysisWorker> workers) {
+        assertNull(workers.getIfAvailable());
+    }
 
     @Test
     void restoresOrderedSnapshotsFromPostgresAfterClearingPersistenceContext() {
@@ -162,15 +176,7 @@ class AnalysisRunRepositoryIntegrationTest {
 
         @AfterEach
         void removeCommittedFixture() {
-            TestTransaction.start();
-            jdbc.update("delete from property_analyses where analysis_run_id = ?", runId);
-            jdbc.update("delete from analysis_runs where id = ?", runId);
-            jdbc.update("delete from candidate_properties where startup_condition_id = ?", conditionId);
-            jdbc.update("delete from startup_conditions where id = ?", conditionId);
-            jdbc.update("delete from users where id = ?", userId);
-            jdbc.update("delete from industries where id = ?", industryId);
-            TestTransaction.flagForCommit();
-            TestTransaction.end();
+            cleanUp(runId, conditionId, userId, industryId);
         }
 
         private CalculatedPropertyResult result(Long id, String grade) {
@@ -236,6 +242,69 @@ class AnalysisRunRepositoryIntegrationTest {
             assertNull(run.getCalculationVersion());
             assertEquals(0, results.findByAnalysisRun_Id(runId).size());
         }
+    }
+
+    @Nested
+    @ActiveProfiles("analysis-api")
+    class WorkerTransactions {
+        @MockitoBean private FinancialCalculator calculator;
+
+        @ParameterizedTest
+        @ValueSource(strings = {"success", "calculation error", "storage error"})
+        void processesCommittedSnapshotsOnWorkerThread(String scenario) {
+            var condition = persistCondition();
+            Long first = persistProperty(condition, "first");
+            Long second = persistProperty(condition, "second");
+            var caller = Thread.currentThread();
+            when(calculator.calculate(anyMap(), anyList())).thenAnswer(invocation -> {
+                assertNotEquals(caller, Thread.currentThread());
+                List<PropertySnapshotV1> snapshots = invocation.getArgument(1);
+                assertEquals(List.of(first, second), snapshots.stream().map(PropertySnapshotV1::candidatePropertyId).toList());
+                assertEquals(20L, snapshots.get(0).monthlyRent());
+                Map<String, Object> conditionSnapshot = invocation.getArgument(0);
+                assertEquals("snapshot condition", conditionSnapshot.get("title"));
+                if (scenario.equals("calculation error")) {
+                    throw new IllegalStateException("test calculation failure");
+                }
+                var rows = snapshots.stream().map(snapshot -> new CalculatedPropertyResult(
+                        snapshot.candidatePropertyId(), 10L, 2L, BigDecimal.ONE, 3L, 4L, "test", 5L, 6L,
+                        BigDecimal.ONE, scenario.equals("storage error") && snapshot.candidatePropertyId().equals(second)
+                                ? "x".repeat(256) : "test", 1, "test")).toList();
+                return new FinancialCalculator.Result(rows, Map.of("source", "test"), "test",
+                        LocalDateTime.of(2025, 1, 1, 0, 0), 3);
+            });
+            var response = service.start(condition.getUser().getId(),
+                    new AnalysisRunRequest(condition.getId(), List.of(first, second), "async"));
+            entityManager.find(CandidateProperty.class, first).updatePropertyDetails(
+                    "changed", BigDecimal.TEN, 100L, 999L, 3L, 5L);
+            verifyNoInteractions(calculator);
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+            try {
+                AnalysisStatus expected = scenario.equals("success") ? AnalysisStatus.COMPLETED : AnalysisStatus.FAILED;
+                await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertEquals(expected,
+                        repository.findById(response.analysisRunId()).orElseThrow().getStatus()));
+                assertEquals(scenario.equals("success") ? 2 : 0, jdbc.queryForObject(
+                        "select count(*) from property_analyses where analysis_run_id = ?", Integer.class,
+                        response.analysisRunId()));
+                verify(calculator).calculate(anyMap(), anyList());
+            } finally {
+                cleanUp(response.analysisRunId(), condition.getId(), condition.getUser().getId(),
+                        condition.getIndustry().getId());
+            }
+        }
+    }
+
+    private void cleanUp(Long runId, Long conditionId, Long userId, Long industryId) {
+        TestTransaction.start();
+        jdbc.update("delete from property_analyses where analysis_run_id = ?", runId);
+        jdbc.update("delete from analysis_runs where id = ?", runId);
+        jdbc.update("delete from candidate_properties where startup_condition_id = ?", conditionId);
+        jdbc.update("delete from startup_conditions where id = ?", conditionId);
+        jdbc.update("delete from users where id = ?", userId);
+        jdbc.update("delete from industries where id = ?", industryId);
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
     }
 
     private Long persistProperty(StartupCondition condition, String name) {

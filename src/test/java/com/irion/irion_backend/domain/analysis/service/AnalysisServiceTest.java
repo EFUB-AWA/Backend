@@ -18,7 +18,8 @@ class AnalysisServiceTest {
     void validationFailureStopsBeforeSaving(AnalysisErrorCode code) {
         var validator = mock(AnalysisRequestValidator.class);
         var repository = mock(AnalysisRunRepository.class);
-        var service = new AnalysisService(validator, new AnalysisSnapshotFactory(), repository);
+        var service = new AnalysisService(validator, new AnalysisSnapshotFactory(), repository,
+                mock(org.springframework.context.ApplicationEventPublisher.class));
         var request = new AnalysisRunRequest(1L, List.of(2L), "analysis");
         when(validator.validate(3L, request)).thenThrow(new BusinessException(code));
         assertSame(code, assertThrows(BusinessException.class, () -> service.start(3L, request)).getErrorCode());

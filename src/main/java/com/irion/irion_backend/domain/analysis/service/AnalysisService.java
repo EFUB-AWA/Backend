@@ -6,6 +6,7 @@ import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
 import com.irion.irion_backend.domain.analysis.entity.PropertySnapshotV1;
 import com.irion.irion_backend.domain.analysis.repository.AnalysisRunRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,9 @@ public class AnalysisService {
     private final AnalysisRequestValidator validator;
     private final AnalysisSnapshotFactory snapshotFactory;
     private final AnalysisRunRepository repository;
+    private final ApplicationEventPublisher events;
+
+    public record AnalysisStarted(Long runId) {}
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AnalysisRunResponse start(Long requesterId, AnalysisRunRequest request) {
@@ -25,6 +29,8 @@ public class AnalysisService {
         var snapshots = snapshotFactory.propertySnapshots(validated.candidateProperties());
         var ids = snapshots.stream().map(PropertySnapshotV1::candidatePropertyId).toList();
         var run = AnalysisRun.create(condition, request.title(), ids, conditionSnapshot, snapshots);
-        return AnalysisRunResponse.from(repository.save(run));
+        var saved = repository.save(run);
+        events.publishEvent(new AnalysisStarted(saved.getId()));
+        return AnalysisRunResponse.from(saved);
     }
 }

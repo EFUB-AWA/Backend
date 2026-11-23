@@ -1,6 +1,7 @@
 package com.irion.irion_backend.domain.analysis.controller;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
+import com.irion.irion_backend.domain.analysis.calculation.FinancialCalculator;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunResponse;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
 import com.irion.irion_backend.domain.analysis.service.AnalysisService;
@@ -43,6 +44,7 @@ class AnalysisControllerTest {
     @Autowired private MockMvc mvc;
     @Autowired private JwtProvider jwt;
     @MockitoBean private AnalysisService service;
+    @MockitoBean private FinancialCalculator calculator;
 
     private ResultActions submit(String body) throws Exception {
         return mvc.perform(post(PATH).header("Authorization", "Bearer " + jwt.createAccessToken(7L).token())
