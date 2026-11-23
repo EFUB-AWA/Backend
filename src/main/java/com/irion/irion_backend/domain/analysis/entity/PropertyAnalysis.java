@@ -102,3 +102,4 @@ public class PropertyAnalysis extends BaseEntity {
         return row;
     }
 }
+

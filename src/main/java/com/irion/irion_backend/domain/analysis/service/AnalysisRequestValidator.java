@@ -1,3 +1,4 @@
+
 package com.irion.irion_backend.domain.analysis.service;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
@@ -33,6 +34,7 @@ public class AnalysisRequestValidator {
         if (request == null || request.startupConditionId() == null || request.candidatePropertyIds() == null) {
             throw new BusinessException(INVALID_ANALYSIS_REQUEST);
         }
+
         List<Long> ids = request.candidatePropertyIds();
         if (ids.isEmpty()) {
             throw new BusinessException(EMPTY_PROPERTY_LIST);
@@ -49,22 +51,28 @@ public class AnalysisRequestValidator {
         for (CandidateProperty property : propertyRepository.findAllById(ids)) {
             byId.put(property.getId(), property);
         }
+
         if (!byId.keySet().containsAll(ids)) {
             throw new BusinessException(PROPERTY_NOT_FOUND);
         }
+
         for (CandidateProperty property : byId.values()) {
             requireOwner(property.getStartupCondition(), requesterId);
         }
+
         for (CandidateProperty property : byId.values()) {
             if (!request.startupConditionId().equals(property.getStartupCondition().getId())) {
                 throw new BusinessException(INVALID_ANALYSIS_REQUEST);
             }
         }
+
         for (CandidateProperty property : byId.values()) {
-            if (property.getMappingStatus() != MappingStatus.MAPPED || !StringUtils.hasText(property.getCommercialAreaCode())) {
+            if (property.getMappingStatus() != MappingStatus.MAPPED
+                    || !StringUtils.hasText(property.getCommercialAreaCode())) {
                 throw new BusinessException(PROPERTY_MAPPING_NOT_COMPLETED);
             }
         }
+
         return new ValidatedRequest(condition, ids.stream().map(byId::get).toList());
     }
 
@@ -74,5 +82,8 @@ public class AnalysisRequestValidator {
         }
     }
 
-    public record ValidatedRequest(StartupCondition startupCondition, List<CandidateProperty> candidateProperties) {}
+    public record ValidatedRequest(
+            StartupCondition startupCondition,
+            List<CandidateProperty> candidateProperties
+    ) {}
 }
