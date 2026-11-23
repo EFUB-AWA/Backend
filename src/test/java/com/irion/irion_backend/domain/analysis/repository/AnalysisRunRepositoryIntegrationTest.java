@@ -97,6 +97,25 @@ class AnalysisRunRepositoryIntegrationTest {
     }
 
     @Test
+    void storedSnapshotKeepsRequestTimeValuesAfterPropertyUpdate() {
+        StartupCondition condition = persistCondition();
+        Long id = persistProperty(condition, "original");
+        var response = service.start(condition.getUser().getId(),
+                new AnalysisRunRequest(condition.getId(), List.of(id), "snapshot history"));
+
+        entityManager.find(CandidateProperty.class, id).updatePropertyDetails(
+                "updated", new BigDecimal("60.30"), 200L, 40L, 6L, 10L);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertEquals(40L, entityManager.find(CandidateProperty.class, id).getMonthlyRent());
+        var run = repository.findById(response.analysisRunId()).orElseThrow();
+        assertEquals(List.of(new PropertySnapshotV1(1, id, "original", "address", null, 37.5, 127.0,
+                new BigDecimal("48.20"), 100L, 20L, 3L, 5L, null, MappingStatus.MAPPED, "A1")),
+                run.getPropertySnapshots());
+    }
+
+    @Test
     void failedSaveMarksSharedTransactionForRollback() {
         StartupCondition condition = persistCondition();
         Long property = persistProperty(condition, "rollback");
