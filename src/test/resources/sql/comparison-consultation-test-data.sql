@@ -2,22 +2,26 @@
 -- 선행: property-consultation-test-data.sql (회원 9001·9002, 창업 조건 9001·9002, 매물 9001~9004)
 
 -- 분석 실행 (비교 컨설팅과 1:1이라 컨설팅마다 하나씩)
+WITH runs (id, startup_condition_id, title, status, candidate_property_ids, condition_snapshot) AS (
+    VALUES
+        (9003, 9001, '서대문구 비교 1', 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
+         '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9004, 9001, '서대문구 비교 2', 'COMPLETED', '[9001, 9002]'::jsonb,
+         '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9005, 9001, '서대문구 비교 3', 'COMPLETED', '[9002, 9003]'::jsonb,
+         '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9006, 9001, '서대문구 비교 4', 'COMPLETED', '[9001, 9003]'::jsonb,
+         '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9007, 9001, '서대문구 비교 5', 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
+         '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9008, 9002, '마포구 비교',     'COMPLETED', '[9004]'::jsonb,
+         '{"title":"마포구 카페 창업"}'::jsonb)
+)
 INSERT INTO analysis_runs
-(id, startup_condition_id, title, status, candidate_property_ids, condition_snapshot,
- created_at, updated_at)
-VALUES
-    (9003, 9001, '서대문구 비교 1', 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
-     '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9004, 9001, '서대문구 비교 2', 'COMPLETED', '[9001, 9002]'::jsonb,
-     '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9005, 9001, '서대문구 비교 3', 'COMPLETED', '[9002, 9003]'::jsonb,
-     '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9006, 9001, '서대문구 비교 4', 'COMPLETED', '[9001, 9003]'::jsonb,
-     '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9007, 9001, '서대문구 비교 5', 'COMPLETED', '[9001, 9002, 9003]'::jsonb,
-     '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9008, 9002, '마포구 비교',     'COMPLETED', '[9004]'::jsonb,
-     '{"title":"마포구 카페 창업"}'::jsonb, now(), now());
+(id, startup_condition_id, title, status, candidate_property_ids, property_snapshots, condition_snapshot, created_at, updated_at)
+SELECT id, startup_condition_id, title, status, candidate_property_ids,
+       pg_temp.fixture_property_snapshots(candidate_property_ids), condition_snapshot, now(), now()
+FROM runs;
 
 -- 비교 AI 컨설팅
 INSERT INTO comparison_ai_consultations
@@ -85,14 +89,18 @@ VALUES
 
 -- ===== 목록 조회용 (A 저장본 추가: 9001 + 9007~9010 = 5개) =====
 
+WITH runs (id, startup_condition_id, title, status, candidate_property_ids, condition_snapshot) AS (
+    VALUES
+        (9009, 9001, '서대문구 비교 6', 'COMPLETED', '[9001, 9002]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9010, 9001, '서대문구 비교 7', 'COMPLETED', '[9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9011, 9001, '서대문구 비교 8', 'COMPLETED', '[9001, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb),
+        (9012, 9001, '서대문구 비교 9', 'COMPLETED', '[9001, 9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb)
+)
 INSERT INTO analysis_runs
-(id, startup_condition_id, title, status, candidate_property_ids, condition_snapshot,
- created_at, updated_at)
-VALUES
-    (9009, 9001, '서대문구 비교 6', 'COMPLETED', '[9001, 9002]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9010, 9001, '서대문구 비교 7', 'COMPLETED', '[9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9011, 9001, '서대문구 비교 8', 'COMPLETED', '[9001, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now()),
-    (9012, 9001, '서대문구 비교 9', 'COMPLETED', '[9001, 9002, 9003]'::jsonb, '{"title":"서대문구 카페 창업"}'::jsonb, now(), now());
+(id, startup_condition_id, title, status, candidate_property_ids, property_snapshots, condition_snapshot, created_at, updated_at)
+SELECT id, startup_condition_id, title, status, candidate_property_ids,
+       pg_temp.fixture_property_snapshots(candidate_property_ids), condition_snapshot, now(), now()
+FROM runs;
 
 INSERT INTO comparison_ai_consultations
 (id, analysis_run_id, property_snapshots, status, summary, description, pros_and_cons,
