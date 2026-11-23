@@ -46,8 +46,12 @@ public class AnalysisRun extends BaseEntity {
     private AnalysisStatus status;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "candidate_property_ids", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "candidate_property_ids", nullable = false, updatable = false, columnDefinition = "jsonb")
     private List<Long> candidatePropertyIds;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "property_snapshots", nullable = false, updatable = false, columnDefinition = "jsonb")
+    private List<PropertySnapshotV1> propertySnapshots;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "condition_snapshot", nullable = false, columnDefinition = "jsonb")
@@ -70,21 +74,37 @@ public class AnalysisRun extends BaseEntity {
     private LocalDateTime completedAt;
 
     public static AnalysisRun create(StartupCondition startupCondition, String title,
-                                     List<Long> candidatePropertyIds, Map<String, Object> conditionSnapshot) {
+                                     List<Long> candidatePropertyIds, Map<String, Object> conditionSnapshot,
+                                     List<PropertySnapshotV1> propertySnapshots) {
         Objects.requireNonNull(startupCondition, "startupCondition is required");
         Objects.requireNonNull(candidatePropertyIds, "candidatePropertyIds is required");
         Objects.requireNonNull(conditionSnapshot, "conditionSnapshot is required");
-        if (candidatePropertyIds.isEmpty()) {
+        List<Long> ids = List.copyOf(candidatePropertyIds);
+        List<PropertySnapshotV1> snapshots = List.copyOf(propertySnapshots);
+        if (ids.isEmpty()) {
             throw new IllegalArgumentException("candidatePropertyIds must not be empty");
+        }
+
+        if (!ids.equals(snapshots.stream().map(PropertySnapshotV1::candidatePropertyId).toList())) {
+            throw new IllegalArgumentException("propertySnapshots must match candidatePropertyIds in request order");
         }
 
         AnalysisRun run = new AnalysisRun();
         run.startupCondition = startupCondition;
         run.title = title;
-        run.candidatePropertyIds = List.copyOf(candidatePropertyIds);
+        run.candidatePropertyIds = ids;
+        run.propertySnapshots = snapshots;
         run.conditionSnapshot = Map.copyOf(conditionSnapshot);
         run.status = AnalysisStatus.PROCESSING;
         return run;
+    }
+
+    public List<PropertySnapshotV1> getPropertySnapshots() {
+        return List.copyOf(propertySnapshots);
+    }
+
+    public List<Long> getCandidatePropertyIds() {
+        return List.copyOf(candidatePropertyIds);
     }
 
     public void complete(Map<String, Object> assumptionsSnapshot, String calculationVersion,

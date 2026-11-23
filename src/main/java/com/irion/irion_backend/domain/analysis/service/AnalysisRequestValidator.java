@@ -1,3 +1,4 @@
+
 package com.irion.irion_backend.domain.analysis.service;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
@@ -10,6 +11,7 @@ import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -19,7 +21,6 @@ import java.util.Objects;
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.*;
 import static com.irion.irion_backend.domain.property.exception.PropertyErrorCode.PROPERTY_NOT_FOUND;
 import static com.irion.irion_backend.domain.startupCondition.exception.StartupConditionErrorCode.STARTUP_CONDITION_NOT_FOUND;
-
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class AnalysisRequestValidator {
         if (request == null || request.startupConditionId() == null || request.candidatePropertyIds() == null) {
             throw new BusinessException(INVALID_ANALYSIS_REQUEST);
         }
+
         List<Long> ids = request.candidatePropertyIds();
         if (ids.isEmpty()) {
             throw new BusinessException(EMPTY_PROPERTY_LIST);
@@ -49,22 +51,28 @@ public class AnalysisRequestValidator {
         for (CandidateProperty property : propertyRepository.findAllById(ids)) {
             byId.put(property.getId(), property);
         }
+
         if (!byId.keySet().containsAll(ids)) {
             throw new BusinessException(PROPERTY_NOT_FOUND);
         }
+
         for (CandidateProperty property : byId.values()) {
             requireOwner(property.getStartupCondition(), requesterId);
         }
+
         for (CandidateProperty property : byId.values()) {
             if (!request.startupConditionId().equals(property.getStartupCondition().getId())) {
                 throw new BusinessException(INVALID_ANALYSIS_REQUEST);
             }
         }
+
         for (CandidateProperty property : byId.values()) {
-            if (property.getMappingStatus() != MappingStatus.MAPPED || property.getCommercialAreaCode() == null) {
+            if (property.getMappingStatus() != MappingStatus.MAPPED
+                    || !StringUtils.hasText(property.getCommercialAreaCode())) {
                 throw new BusinessException(PROPERTY_MAPPING_NOT_COMPLETED);
             }
         }
+
         return new ValidatedRequest(condition, ids.stream().map(byId::get).toList());
     }
 
@@ -74,5 +82,8 @@ public class AnalysisRequestValidator {
         }
     }
 
-    public record ValidatedRequest(StartupCondition startupCondition, List<CandidateProperty> candidateProperties) {}
+    public record ValidatedRequest(
+            StartupCondition startupCondition,
+            List<CandidateProperty> candidateProperties
+    ) {}
 }

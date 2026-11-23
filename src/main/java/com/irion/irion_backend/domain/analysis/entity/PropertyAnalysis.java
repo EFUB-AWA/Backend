@@ -1,5 +1,7 @@
 package com.irion.irion_backend.domain.analysis.entity;
 
+import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
+
 import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
 import jakarta.persistence.Column;
@@ -77,4 +79,27 @@ public class PropertyAnalysis extends BaseEntity {
 
     @Column(name = "recommendation_reason", columnDefinition = "text")
     private String recommendationReason;
+
+    public static PropertyAnalysis from(AnalysisRun run, CandidateProperty property, Map<String, Object> snapshot,
+                                        CalculatedPropertyResult result) {
+        result.requireComplete();
+        PropertyAnalysis row = new PropertyAnalysis();
+        row.analysisRun = run;
+        row.candidateProperty = property;
+        row.propertySnapshot = snapshot;
+        row.expectedMonthlySales = result.expectedMonthlySales();
+        row.monthlyFixedCost = result.monthlyFixedCost();
+        row.variableCostRate = result.variableCostRate();
+        row.monthlyOperatingProfit = result.monthlyOperatingProfit();
+        row.breakEvenSales = result.breakEvenSales();
+        row.breakEvenStatus = result.breakEvenStatus();
+        row.initialRequiredCash = result.initialRequiredCash();
+        row.initialOperatingCash = result.initialOperatingCash();
+        row.safetyScore = result.safetyScore();
+        row.safetyGrade = result.safetyGrade();
+        row.recommendationRank = result.recommendationRank();
+        row.recommendationReason = result.recommendationReason();
+        return row;
+    }
 }
+
