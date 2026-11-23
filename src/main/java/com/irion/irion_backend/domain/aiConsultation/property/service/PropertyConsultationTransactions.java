@@ -6,6 +6,7 @@ import com.irion.irion_backend.domain.aiConsultation.property.entity.PropertyCon
 import com.irion.irion_backend.domain.aiConsultation.property.repository.PropertyConsultationRepository;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
+import com.irion.irion_backend.domain.analysis.entity.PropertyAnalysis;
 import com.irion.irion_backend.domain.analysis.repository.PropertyAnalysisRepository;
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -29,15 +30,37 @@ public class PropertyConsultationTransactions {
     public Reservation reserve(Long requesterId, Long analysisId) {
         var analysis = analyses.findForConsultation(analysisId)
                 .orElseThrow(() -> new BusinessException(PROPERTY_ANALYSIS_NOT_FOUND));
-        var run = analysis.getAnalysisRun();
-        if (!run.getStartupCondition().getUser().getId().equals(requesterId)
-                || !analysis.getCandidateProperty().getStartupCondition().getUser().getId().equals(requesterId)) {
-            throw new BusinessException(CONSULTATION_ACCESS_DENIED);
-        }
+        requireOwner(requesterId, analysis);
         var existing = consultations.findByPropertyAnalysis_Id(analysisId);
         if (existing.isPresent()) {
             return new Reservation(PropertyConsultationDetailResponse.from(existing.get()), null);
         }
+        var input = inputFor(analysis);
+        var pending = consultations.save(PropertyConsultation.pending(analysis));
+        return new Reservation(PropertyConsultationDetailResponse.from(pending), input);
+    }
+
+    public Reservation reserveRetry(Long requesterId, Long consultationId, Long analysisId) {
+        var consultation = consultations.findForRetry(consultationId)
+                .orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND));
+        var analysis = consultation.getPropertyAnalysis();
+        requireOwner(requesterId, analysis);
+        if (!analysis.getId().equals(analysisId)) {
+            throw new BusinessException(PROPERTY_ANALYSIS_NOT_FOUND);
+        }
+        consultation.beginRetry();
+        return new Reservation(PropertyConsultationDetailResponse.from(consultation), inputFor(analysis));
+    }
+
+    private void requireOwner(Long requesterId, PropertyAnalysis analysis) {
+        if (!analysis.getAnalysisRun().getStartupCondition().getUser().getId().equals(requesterId)
+                || !analysis.getCandidateProperty().getStartupCondition().getUser().getId().equals(requesterId)) {
+            throw new BusinessException(CONSULTATION_ACCESS_DENIED);
+        }
+    }
+
+    private ConsultationAiClient.Input inputFor(PropertyAnalysis analysis) {
+        var run = analysis.getAnalysisRun();
         if (run.getStatus() != AnalysisStatus.COMPLETED || run.getConditionSnapshot().isEmpty()
                 || analysis.getPropertySnapshot().isEmpty()) {
             throw new BusinessException(ANALYSIS_NOT_READY);
@@ -54,9 +77,7 @@ public class PropertyConsultationTransactions {
         }
         var condition = new HashMap<>(run.getConditionSnapshot());
         condition.remove("userId");
-        var input = new ConsultationAiClient.Input(condition, analysis.getPropertySnapshot(), metrics);
-        var pending = consultations.save(PropertyConsultation.pending(analysis));
-        return new Reservation(PropertyConsultationDetailResponse.from(pending), input);
+        return new ConsultationAiClient.Input(condition, analysis.getPropertySnapshot(), metrics);
     }
 
     public PropertyConsultationDetailResponse complete(Long id, ConsultationAiClient.Result result) {

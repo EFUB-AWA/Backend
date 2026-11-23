@@ -119,6 +119,88 @@ class PropertyConsultationCreationTest {
         return "Bearer " + jwt.createAccessToken(user).token();
     }
 
+    private long failedConsultation() {
+        return jdbc.queryForObject("""
+                insert into property_ai_consultations(property_analysis_id, status, created_at, updated_at)
+                values (9001, 'FAILED', now(), now()) returning id
+                """, Long.class);
+    }
+
+    private ResultActions retry(long user, long consultation, long analysis) throws Exception {
+        return mvc.perform(post(PATH + "/{id}/retry", consultation).header("Authorization", bearer(user))
+                .contentType("application/json").content("{\"propertyAnalysisId\":" + analysis + "}"));
+    }
+
+    @Test
+    void concurrentRetryUpdatesOriginalRowOnce() throws Exception {
+        long id = failedConsultation();
+        release = new CountDownLatch(1);
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var first = executor.submit(() -> retry(9001, id, 9001).andReturn());
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            mvc.perform(get(PATH + "/" + id).header("Authorization", bearer(9001)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDING"));
+            retry(9001, id, 9001).andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("CONSULTATION_NOT_RETRYABLE"));
+            release.countDown();
+            var response = first.get(5, TimeUnit.SECONDS).getResponse();
+            assertEquals(201, response.getStatus());
+            var result = mapper.readTree(response.getContentAsByteArray());
+            assertEquals(id, result.get("propertyConsultId").asLong());
+            assertEquals(9001, result.get("propertyAnalysisId").asLong());
+            assertEquals("COMPLETED", result.get("status").asString());
+            assertEquals("테스트 요약", result.get("summary").asString());
+            assertTrue(result.get("completedAt").isString());
+            var detail = mvc.perform(get(PATH + "/" + id).header("Authorization", bearer(9001)))
+                    .andExpect(status().isOk()).andReturn().getResponse();
+            assertEquals(result, mapper.readTree(detail.getContentAsByteArray()));
+            retry(9001, id, 9001).andExpect(status().isConflict());
+            assertEquals(1, calls.get());
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void checksRetryIdentityAndAnalysisBeforeCallingAi() throws Exception {
+        long id = failedConsultation();
+        mvc.perform(post(PATH + "/{id}/retry", id)).andExpect(status().isUnauthorized());
+        mvc.perform(post(PATH + "/{id}/retry", id).header("Authorization", bearer(9001))
+                .contentType("application/json").content("{}")).andExpect(status().isBadRequest());
+        retry(9002, id, 9001).andExpect(status().isForbidden());
+        retry(9001, 999999, 9001).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CONSULTATION_NOT_FOUND"));
+        retry(9001, id, 9002).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PROPERTY_ANALYSIS_NOT_FOUND"));
+        jdbc.update("update property_analyses set safety_score=null where id=9001");
+        retry(9001, id, 9001).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANALYSIS_NOT_READY"));
+        assertEquals("FAILED", jdbc.queryForObject(
+                "select status from property_ai_consultations where id=?", String.class, id));
+        assertEquals(0, calls.get());
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "500,JSON_PARSING_FAILED", "502,AI_CONSULTATION_GENERATION_FAILED", "504,AI_CONSULTATION_TIMEOUT"})
+    void failedRetryKeepsSameIdAndCanBeRetriedAgain(int httpStatus, String code) throws Exception {
+        long id = failedConsultation();
+        if (httpStatus == 500) content = "{";
+        if (httpStatus == 502) upstreamStatus = 503;
+        if (httpStatus == 504) release = new CountDownLatch(1);
+        retry(9001, id, 9001).andExpect(status().is(httpStatus)).andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.data.propertyConsultId").value(id))
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
+        release.countDown();
+        mvc.perform(get(PATH + "/" + id).header("Authorization", bearer(9001))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED")).andExpect(jsonPath("$.completedAt").isEmpty());
+        upstreamStatus = 200;
+        content = CONTENT;
+        retry(9001, id, 9001).andExpect(status().isCreated()).andExpect(jsonPath("$.propertyConsultId").value(id));
+        assertEquals(2, calls.get());
+    }
+
     @Test
     void createsOnceAndReturnsSameContentFromGetAndRepeatedPost() throws Exception {
         var body = submit(9001, 9001).andExpect(status().isCreated())

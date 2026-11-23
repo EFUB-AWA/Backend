@@ -48,6 +48,13 @@ public class PropertyConsultationController {
         return ResponseEntity.status(creation.created() ? HttpStatus.CREATED : HttpStatus.OK).body(creation.detail());
     }
 
+    @PostMapping("/{propertyConsultId}/retry")
+    public ResponseEntity<PropertyConsultationDetailResponse> retry(@AuthMember Long requesterId,
+            @PathVariable Long propertyConsultId, @Valid @RequestBody PropertyConsultationCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(propertyConsultationService.retry(requesterId, propertyConsultId, request.propertyAnalysisId()));
+    }
+
     @GetMapping("/{propertyConsultId}")
     public ResponseEntity<PropertyConsultationDetailResponse> getPropertyConsultation(@AuthMember Long requesterId,
                                                                                       @PathVariable("propertyConsultId") Long propertyConsultId) {
