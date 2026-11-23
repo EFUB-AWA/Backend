@@ -11,6 +11,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Entity
@@ -53,6 +54,37 @@ public class PropertyConsultation extends BaseEntity {
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    public static PropertyConsultation pending(PropertyAnalysis analysis) {
+        var consultation = new PropertyConsultation();
+        consultation.propertyAnalysis = analysis;
+        consultation.status = ConsultationStatus.PENDING;
+        return consultation;
+    }
+
+    public void complete(String summary, List<RiskFactor> risks, List<ImprovementSuggestion> suggestions,
+                         String considerations, String modelName, String promptVersion) {
+        requirePending();
+        this.summary = summary;
+        this.riskFactors = List.copyOf(risks);
+        this.improvementSuggestions = List.copyOf(suggestions);
+        this.contractConsiderations = considerations;
+        this.modelName = modelName;
+        this.promptVersion = promptVersion;
+        this.completedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        this.status = ConsultationStatus.COMPLETED;
+    }
+
+    public void fail() {
+        requirePending();
+        this.status = ConsultationStatus.FAILED;
+    }
+
+    private void requirePending() {
+        if (status != ConsultationStatus.PENDING) {
+            throw new IllegalStateException("Consultation must be PENDING");
+        }
+    }
 
 
 }
