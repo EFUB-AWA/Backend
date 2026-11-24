@@ -19,6 +19,7 @@ public class AnalysisSnapshotFactory {
                 entry("id", condition.getId()),
                 entry("userId", condition.getUser().getId()),
                 entry("industryId", condition.getIndustry().getId()),
+                entry("industryCode", condition.getIndustry().getCode()),
                 entry("title", condition.getTitle()),
                 entry("preferredRegionCode", condition.getPreferredRegionCode()),
                 entry("totalCapital", condition.getTotalCapital()),

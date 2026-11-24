@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,7 +40,7 @@ public class AnalysisRequestValidator {
         if (ids.isEmpty()) {
             throw new BusinessException(EMPTY_PROPERTY_LIST);
         }
-        if (ids.stream().anyMatch(Objects::isNull)) {
+        if (ids.stream().anyMatch(Objects::isNull) || new HashSet<>(ids).size() != ids.size()) {
             throw new BusinessException(INVALID_ANALYSIS_REQUEST);
         }
 

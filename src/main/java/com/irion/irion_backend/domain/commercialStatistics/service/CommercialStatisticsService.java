@@ -83,6 +83,10 @@ public class CommercialStatisticsService {
         }
     }
 
+    public Optional<StoreStatistics> findStoreStatistics(String quarter, String areaCode, String industryCode) {
+        return readStores(quarter, areaCode, industryCode).statistics();
+    }
+
     private SnapshotLookup<StoreStatistics> readStores(String quarter, String areaCode, String industryCode) {
         var cached = cache.findStoreStatistics(quarter, areaCode, industryCode);
         if (cached.loaded()) {

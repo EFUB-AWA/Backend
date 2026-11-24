@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.core.task.AsyncTaskExecutor;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
 
@@ -20,7 +21,8 @@ class AnalysisWorkerTest {
     private final FinancialCalculator calculator = mock(FinancialCalculator.class);
     private final AnalysisResultService results = mock(AnalysisResultService.class);
     private final AnalysisFailureService failures = mock(AnalysisFailureService.class);
-    private final AnalysisWorker worker = new AnalysisWorker(executor, runs, calculator, results, failures);
+    private final AnalysisCommercialStatistics statistics = mock(AnalysisCommercialStatistics.class);
+    private final AnalysisWorker worker = new AnalysisWorker(executor, runs, calculator, results, failures, statistics);
 
     @ParameterizedTest
     @EnumSource(value = AnalysisStatus.class, names = {"COMPLETED", "FAILED"})
@@ -30,6 +32,20 @@ class AnalysisWorkerTest {
         when(run.getStatus()).thenReturn(status);
         worker.process(1L);
         verifyNoInteractions(calculator, results, failures);
+    }
+
+    @Test
+    void usesPreviouslyFrozenStatisticsWithoutFetchingAgain() {
+        var run = mock(AnalysisRun.class);
+        var snapshot = Map.<String, Object>of(AnalysisCommercialStatistics.SNAPSHOT_KEY, Map.of());
+        when(runs.findById(1L)).thenReturn(Optional.of(run));
+        when(run.getStatus()).thenReturn(AnalysisStatus.PROCESSING);
+        when(run.getConditionSnapshot()).thenReturn(snapshot);
+        var failure = new IllegalStateException("policy unavailable");
+        when(calculator.calculate(eq(snapshot), anyList())).thenThrow(failure);
+        worker.process(1L);
+        verify(failures).fail(1L, failure);
+        verifyNoInteractions(statistics, results);
     }
 
     @Test

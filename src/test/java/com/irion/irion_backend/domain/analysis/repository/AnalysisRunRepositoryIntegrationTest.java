@@ -1,7 +1,7 @@
 package com.irion.irion_backend.domain.analysis.repository;
 
 import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
-import com.irion.irion_backend.domain.analysis.calculation.FinancialCalculator;
+import com.irion.irion_backend.domain.analysis.calculation.CalculationPolicy;
 import com.irion.irion_backend.domain.analysis.service.AnalysisWorker;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
@@ -12,9 +12,18 @@ import com.irion.irion_backend.domain.property.entity.CandidateProperty;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
 import com.irion.irion_backend.domain.analysis.entity.PropertySnapshotV1;
 import com.irion.irion_backend.domain.industry.entity.Industry;
+import com.irion.irion_backend.domain.commercialStatistics.dto.EstimatedSalesStatistics;
+import com.irion.irion_backend.domain.commercialStatistics.dto.StoreStatistics;
+import com.irion.irion_backend.domain.commercialStatistics.service.CommercialSalesService;
+import com.irion.irion_backend.domain.commercialStatistics.service.CommercialStatisticsService;
+import java.util.Optional;
 import com.irion.irion_backend.domain.property.enums.MappingStatus;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.domain.user.entity.User;
+import com.irion.irion_backend.global.security.jwt.JwtProvider;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
@@ -29,12 +38,17 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -45,6 +59,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
@@ -57,6 +73,16 @@ class AnalysisRunRepositoryIntegrationTest {
     @Autowired private EntityManager entityManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private AnalysisService service;
+    @MockitoBean private CommercialSalesService sales;
+    @MockitoBean private CommercialStatisticsService statistics;
+
+    private void stubObservations() {
+        when(sales.latestPublishedQuarter()).thenReturn("20262");
+        when(sales.findPublishedStatistics("20262", "A1", "CS999999")).thenReturn(Optional.of(new EstimatedSalesStatistics(
+                "20262", "A1", "CS999999", BigDecimal.valueOf(111952232), null, null, null)));
+        when(statistics.findStoreStatistics("20262", "A1", "CS999999")).thenReturn(Optional.of(new StoreStatistics(
+                "20262", "A1", "CS999999", 3L, null, null, null, null, null, null)));
+    }
 
     @Test
     void defaultContextHasNoAnalysisWorker(@Autowired ObjectProvider<AnalysisWorker> workers) {
@@ -90,7 +116,7 @@ class AnalysisRunRepositoryIntegrationTest {
         StartupCondition condition = persistCondition();
         Long first = persistProperty(condition, "first");
         Long second = persistProperty(condition, "second");
-        var ids = List.of(second, first, second);
+        var ids = List.of(second, first);
         var response = service.start(condition.getUser().getId(), new AnalysisRunRequest(condition.getId(), ids, "run"));
         entityManager.clear();
         var run = repository.findById(response.analysisRunId()).orElseThrow();
@@ -99,7 +125,7 @@ class AnalysisRunRepositoryIntegrationTest {
         assertEquals("run", run.getTitle());
         assertNull(run.getAssumptionsSnapshot());
         assertEquals(ids, run.getCandidatePropertyIds());
-        assertEquals(List.of("second", "first", "second"), run.getPropertySnapshots().stream()
+        assertEquals(List.of("second", "first"), run.getPropertySnapshots().stream()
                 .map(PropertySnapshotV1::name).toList());
         assertEquals(new PropertySnapshotV1(1, second, "second", "address", null, 37.5, 127.0,
                 new BigDecimal("48.20"), 100L, 20L, 3L, 5L, null, MappingStatus.MAPPED, "A1"),
@@ -246,53 +272,140 @@ class AnalysisRunRepositoryIntegrationTest {
 
     @Nested
     @ActiveProfiles("analysis-api")
+    @AutoConfigureMockMvc
+    class EndToEnd {
+        @Autowired private MockMvc mvc;
+        @Autowired private JwtProvider jwt;
+        @Autowired private ObjectMapper mapper;
+
+        @Test
+        void acceptsContractAndFailsWithoutVerifiedEstimates() throws Exception {
+            stubObservations();
+            var condition = persistCondition("CS999999");
+            Long property = persistProperty(condition, "mapped property");
+            var token = "Bearer " + jwt.createAccessToken(condition.getUser().getId()).token();
+            var response = mvc.perform(post("/api/analyses").header("Authorization", token)
+                            .contentType("application/json")
+                            .content(mapper.writeValueAsString(new AnalysisRunRequest(condition.getId(), List.of(property), "run"))))
+                    .andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("PROCESSING"))
+                    .andReturn().getResponse();
+            long runId = mapper.readTree(response.getContentAsString()).get("analysisRunId").asLong();
+            TestTransaction.flagForCommit();
+            TestTransaction.end();
+            try {
+                await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
+                        assertEquals(AnalysisStatus.FAILED, repository.findById(runId).orElseThrow().getStatus()));
+                assertEquals(0, jdbc.queryForObject("select count(*) from property_analyses where analysis_run_id = ?",
+                        Integer.class, runId));
+            } finally {
+                cleanUp(runId, condition.getId(), condition.getUser().getId(), condition.getIndustry().getId());
+            }
+        }
+    }
+
+    static class FixturePolicy implements CalculationPolicy {
+        @Override
+        public Evaluation evaluate(Map<String, Object> condition, List<PropertySnapshotV1> properties) {
+            return rules(properties.get(0).candidatePropertyId(), properties.get(1).candidatePropertyId(), "STABLE");
+        }
+
+        private static Evaluation rules(long first, long second, String highGrade) {
+            var sales = Map.of(first, BigDecimal.valueOf(12_000_000), second, BigDecimal.valueOf(13_000_000));
+            var component = new CalculationPolicy.ScoreComponent(BigDecimal.valueOf(100),
+                    f -> f.sales().compareTo(BigDecimal.valueOf(12_000_000)) > 0 ? BigDecimal.TEN : BigDecimal.ZERO);
+            return new CalculationPolicy.Evaluation(sales, Set.of(CalculationPolicy.OpeningCost.DEPOSIT,
+                    CalculationPolicy.OpeningCost.KEY_MONEY), List.of(component), List.of(
+                    new CalculationPolicy.GradeBand(BigDecimal.TEN, highGrade, "fixture"),
+                    new CalculationPolicy.GradeBand(BigDecimal.ZERO, "CAUTION", "fixture")),
+                    Comparator.comparing(CalculationPolicy.Scored::score).reversed(),
+                    Map.of("source", "test"), "test", LocalDateTime.of(2025, 1, 1, 0, 0),
+                    3, RoundingMode.UNNECESSARY);
+        }
+    }
+
+    @Nested
+    @ActiveProfiles("analysis-api")
+    @Import(FixturePolicy.class)
     class WorkerTransactions {
-        @MockitoBean private FinancialCalculator calculator;
+        @MockitoSpyBean private FixturePolicy policy;
 
         @ParameterizedTest
-        @ValueSource(strings = {"success", "calculation error", "storage error"})
+        @ValueSource(strings = {"success", "unreachable", "calculation error", "storage error"})
         void processesCommittedSnapshotsOnWorkerThread(String scenario) {
-            var condition = persistCondition();
+            stubObservations();
+            var condition = persistCondition("CS999999");
             Long first = persistProperty(condition, "first");
             Long second = persistProperty(condition, "second");
+            if (scenario.equals("unreachable")) {
+                entityManager.flush();
+                jdbc.update("update startup_conditions set cost_of_sales_rate = 100 where id = ?", condition.getId());
+                entityManager.refresh(condition);
+            }
             var caller = Thread.currentThread();
-            when(calculator.calculate(anyMap(), anyList())).thenAnswer(invocation -> {
+            doAnswer(invocation -> {
                 assertNotEquals(caller, Thread.currentThread());
                 List<PropertySnapshotV1> snapshots = invocation.getArgument(1);
                 assertEquals(List.of(first, second), snapshots.stream().map(PropertySnapshotV1::candidatePropertyId).toList());
                 assertEquals(20L, snapshots.get(0).monthlyRent());
                 Map<String, Object> conditionSnapshot = invocation.getArgument(0);
                 assertEquals("snapshot condition", conditionSnapshot.get("title"));
+                assertObservation(conditionSnapshot);
                 if (scenario.equals("calculation error")) {
                     throw new IllegalStateException("test calculation failure");
                 }
-                var rows = snapshots.stream().map(snapshot -> new CalculatedPropertyResult(
-                        snapshot.candidatePropertyId(), 10L, 2L, BigDecimal.ONE, 3L, 4L, "test", 5L, 6L,
-                        BigDecimal.ONE, scenario.equals("storage error") && snapshot.candidatePropertyId().equals(second)
-                                ? "x".repeat(256) : "test", 1, "test")).toList();
-                return new FinancialCalculator.Result(rows, Map.of("source", "test"), "test",
-                        LocalDateTime.of(2025, 1, 1, 0, 0), 3);
-            });
+                if (scenario.equals("storage error")) {
+                    return FixturePolicy.rules(first, second, "x".repeat(256));
+                }
+                return invocation.callRealMethod();
+            }).when(policy).evaluate(anyMap(), anyList());
             var response = service.start(condition.getUser().getId(),
                     new AnalysisRunRequest(condition.getId(), List.of(first, second), "async"));
             entityManager.find(CandidateProperty.class, first).updatePropertyDetails(
                     "changed", BigDecimal.TEN, 100L, 999L, 3L, 5L);
-            verifyNoInteractions(calculator);
+            verifyNoInteractions(policy);
             TestTransaction.flagForCommit();
             TestTransaction.end();
             try {
-                AnalysisStatus expected = scenario.equals("success") ? AnalysisStatus.COMPLETED : AnalysisStatus.FAILED;
+                AnalysisStatus expected = scenario.endsWith("error") ? AnalysisStatus.FAILED : AnalysisStatus.COMPLETED;
                 await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertEquals(expected,
                         repository.findById(response.analysisRunId()).orElseThrow().getStatus()));
-                assertEquals(scenario.equals("success") ? 2 : 0, jdbc.queryForObject(
+                assertEquals(expected == AnalysisStatus.COMPLETED ? 2 : 0, jdbc.queryForObject(
                         "select count(*) from property_analyses where analysis_run_id = ?", Integer.class,
                         response.analysisRunId()));
-                verify(calculator).calculate(anyMap(), anyList());
+                verify(policy).evaluate(anyMap(), anyList());
+                assertObservation(repository.findById(response.analysisRunId()).orElseThrow().getConditionSnapshot());
+                verify(sales).latestPublishedQuarter();
+                verify(sales).findPublishedStatistics("20262", "A1", "CS999999");
+                if (expected == AnalysisStatus.COMPLETED) {
+                    var completed = repository.findById(response.analysisRunId()).orElseThrow();
+                    assertEquals("test", completed.getCalculationVersion());
+                    assertEquals("test", completed.getAssumptionsSnapshot().get("source"));
+                    assertEquals(List.of(2, 1), jdbc.queryForList(
+                            "select recommendation_rank from property_analyses where analysis_run_id = ? order by candidate_property_id",
+                            Integer.class, response.analysisRunId()));
+                    if (scenario.equals("unreachable")) {
+                        assertEquals(2, jdbc.queryForObject("select count(*) from property_analyses where analysis_run_id = ? " +
+                                "and break_even_status = 'UNREACHABLE' and break_even_sales is null", Integer.class, response.analysisRunId()));
+                    }
+                    assertEquals(scenario.equals("unreachable") ? List.of(-40L, -40L) : List.of(9_599_960L, 10_399_960L), jdbc.queryForList(
+                            "select monthly_operating_profit from property_analyses where analysis_run_id = ? order by candidate_property_id",
+                            Long.class, response.analysisRunId()));
+                }
             } finally {
                 cleanUp(response.analysisRunId(), condition.getId(), condition.getUser().getId(),
                         condition.getIndustry().getId());
             }
         }
+    }
+
+    private void assertObservation(Map<String, Object> condition) {
+        var snapshot = (Map<?, ?>) condition.get("seoulCommercialStatistics");
+        var areas = (Map<?, ?>) snapshot.get("byCommercialAreaCode");
+        var observation = (Map<?, ?>) areas.get("A1");
+        assertEquals("111952232", observation.get("reportedSalesAmountWon"));
+        assertEquals(3L, ((Number) observation.get("similarIndustryStoreCount")).longValue());
+        assertEquals("CS999999", observation.get("industryCode"));
+        assertEquals("20262", observation.get("quarterCode"));
     }
 
     private void cleanUp(Long runId, Long conditionId, Long userId, Long industryId) {
@@ -316,12 +429,16 @@ class AnalysisRunRepositoryIntegrationTest {
     }
 
     private StartupCondition persistCondition() {
+        return persistCondition(UUID.randomUUID().toString());
+    }
+
+    private StartupCondition persistCondition(String industryCode) {
         UUID key = UUID.randomUUID();
         User user = User.create("snapshot", key + "@example.test", null, key.getLeastSignificantBits());
         entityManager.persist(user);
         Long industryId = jdbc.queryForObject(
                 "insert into industries (code, category, name) values (?, ?, ?) returning id",
-                Long.class, key.toString(), "test", "snapshot");
+                Long.class, industryCode, "test", "snapshot");
         StartupCondition condition = StartupCondition.builder()
                 .user(user).industry(entityManager.getReference(Industry.class, industryId))
                 .title("snapshot condition").preferredRegionCode("11440")

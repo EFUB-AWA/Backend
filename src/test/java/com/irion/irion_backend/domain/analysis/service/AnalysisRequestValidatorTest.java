@@ -82,6 +82,7 @@ class AnalysisRequestValidatorTest {
                 INVALID_ANALYSIS_REQUEST
         );
         expectError(request(), EMPTY_PROPERTY_LIST);
+        expectError(request(10L, 10L), INVALID_ANALYSIS_REQUEST);
         expectError(request(10L, null), INVALID_ANALYSIS_REQUEST);
 
         verifyNoInteractions(conditions, properties);
@@ -192,7 +193,7 @@ class AnalysisRequestValidatorTest {
     }
 
     @Test
-    void returnsMappedPropertiesInRequestOrderIncludingRepeatedIds() {
+    void returnsMappedPropertiesInRequestOrder() {
         StartupCondition condition = condition(1, 7);
 
         CandidateProperty a = property(
@@ -213,7 +214,7 @@ class AnalysisRequestValidatorTest {
         when(b.getCommercialAreaCode())
                 .thenReturn("10002");
 
-        AnalysisRunRequest request = request(11L, 10L, 11L);
+        AnalysisRunRequest request = request(11L, 10L);
 
         when(properties.findAllById(request.candidatePropertyIds()))
                 .thenReturn(List.of(a, b));
@@ -222,7 +223,7 @@ class AnalysisRequestValidatorTest {
 
         assertSame(condition, result.startupCondition());
         assertEquals(
-                List.of(b, a, b),
+                List.of(b, a),
                 result.candidateProperties()
         );
 
