@@ -8,6 +8,8 @@ import com.irion.irion_backend.domain.analysis.repository.AnalysisRunRepository;
 import com.irion.irion_backend.domain.analysis.repository.PropertyAnalysisRepository;
 import com.irion.irion_backend.domain.property.repository.CandidatePropertyRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,6 +41,13 @@ public class AnalysisResultService {
         this.failures = failures;
         this.resultTransaction = new TransactionTemplate(transactions);
         this.resultTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Map<String, Object> freezeStatistics(Long runId, Map<String, Object> observation) {
+        var run = runs.findForUpdate(runId).orElseThrow();
+        run.addConditionObservation(AnalysisCommercialStatistics.SNAPSHOT_KEY, observation);
+        return Map.copyOf(run.getConditionSnapshot());
     }
 
     public void complete(Long runId, List<CalculatedPropertyResult> results, Map<String, Object> assumptions,

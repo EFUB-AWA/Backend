@@ -62,8 +62,20 @@ public class CommercialSalesService {
     public Optional<EstimatedSalesStatistics> findLatestStatistics(String commercialAreaCode, String industryCode) {
         validateLookupCodes(commercialAreaCode, industryCode);
 
-        String quarterCode = cacheRepository.findLatestSalesQuarter()
+        return findPublishedStatistics(latestPublishedQuarter(), commercialAreaCode, industryCode);
+    }
+
+    public String latestPublishedQuarter() {
+        return cacheRepository.findLatestSalesQuarter()
                 .orElseThrow(() -> new BusinessException(SALES_QUARTER_NOT_READY));
+    }
+
+    public Optional<EstimatedSalesStatistics> findPublishedStatistics(String quarterCode, String commercialAreaCode,
+                                                                     String industryCode) {
+        validateLookupCodes(commercialAreaCode, industryCode);
+        if (quarterCode == null || !quarterCode.matches("[0-9]{4}[1-4]")) {
+            throw new IllegalArgumentException("Invalid published sales quarter");
+        }
         var cached = cacheRepository.findPublishedSales(quarterCode, commercialAreaCode, industryCode);
         if (!cached.loaded()) {
             throw new BusinessException(SALES_QUARTER_NOT_READY);

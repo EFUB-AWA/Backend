@@ -20,6 +20,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -107,13 +108,19 @@ public class AnalysisRun extends BaseEntity {
         return List.copyOf(candidatePropertyIds);
     }
 
+    public void addConditionObservation(String key, Map<String, Object> observation) {
+        requireProcessing();
+        var updated = new HashMap<>(conditionSnapshot);
+        updated.putIfAbsent(key, Map.copyOf(observation));
+        conditionSnapshot = Map.copyOf(updated);
+    }
+
     public void complete(Map<String, Object> assumptionsSnapshot, String calculationVersion,
                          LocalDateTime dataCutoffAt, Integer horizonMonths) {
         requireProcessing();
         Objects.requireNonNull(assumptionsSnapshot, "assumptionsSnapshot is required");
         Objects.requireNonNull(calculationVersion, "calculationVersion is required");
         Objects.requireNonNull(dataCutoffAt, "dataCutoffAt is required");
-        Objects.requireNonNull(horizonMonths, "horizonMonths is required");
 
         this.assumptionsSnapshot = Map.copyOf(assumptionsSnapshot);
         this.calculationVersion = calculationVersion;

@@ -18,13 +18,17 @@ public record CalculatedPropertyResult(
         Integer recommendationRank,
         String recommendationReason
 ) {
+    public static final String UNREACHABLE = "UNREACHABLE";
+
     public void requireComplete() {
         Objects.requireNonNull(candidatePropertyId, "candidatePropertyId");
         Objects.requireNonNull(expectedMonthlySales, "expectedMonthlySales");
         Objects.requireNonNull(monthlyFixedCost, "monthlyFixedCost");
         Objects.requireNonNull(variableCostRate, "variableCostRate");
         Objects.requireNonNull(monthlyOperatingProfit, "monthlyOperatingProfit");
-        Objects.requireNonNull(breakEvenSales, "breakEvenSales");
+        if (!UNREACHABLE.equals(breakEvenStatus)) {
+            Objects.requireNonNull(breakEvenSales, "breakEvenSales");
+        }
         Objects.requireNonNull(breakEvenStatus, "breakEvenStatus");
         Objects.requireNonNull(initialRequiredCash, "initialRequiredCash");
         Objects.requireNonNull(initialOperatingCash, "initialOperatingCash");
