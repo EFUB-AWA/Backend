@@ -34,19 +34,32 @@ public interface CalculationPolicy {
 
     /** Grade thresholds are inclusive. The ranking comparator must resolve ties between distinct properties. */
     record Evaluation(Map<Long, BigDecimal> monthlySales, Set<OpeningCost> openingCosts,
-                      List<ScoreComponent> components, List<GradeBand> grades, Comparator<Scored> ranking,
+                      Function<Financials, Scored> assessment, Comparator<Scored> ranking,
                       Map<String, Object> assumptions, String version, LocalDateTime dataCutoffAt,
-                      int horizonMonths, RoundingMode wonRounding) {
+                      Integer horizonMonths, RoundingMode wonRounding) {
         public Evaluation {
             monthlySales = Map.copyOf(monthlySales);
             openingCosts = Set.copyOf(openingCosts);
-            components = List.copyOf(components);
-            grades = grades.stream().sorted(Comparator.comparing(GradeBand::minimumScore).reversed()).toList();
             assumptions = Map.copyOf(assumptions);
+            Objects.requireNonNull(assessment);
             Objects.requireNonNull(ranking);
             Objects.requireNonNull(dataCutoffAt);
             Objects.requireNonNull(wonRounding);
-            if (version.isBlank() || horizonMonths <= 0 || grades.isEmpty()
+            if (version.isBlank() || (horizonMonths != null && horizonMonths <= 0)) throw new IllegalArgumentException("Incomplete calculation policy");
+        }
+
+        public Evaluation(Map<Long, BigDecimal> monthlySales, Set<OpeningCost> openingCosts,
+                          List<ScoreComponent> components, List<GradeBand> grades, Comparator<Scored> ranking,
+                          Map<String, Object> assumptions, String version, LocalDateTime dataCutoffAt,
+                          Integer horizonMonths, RoundingMode wonRounding) {
+            this(monthlySales, openingCosts, weightedAssessment(components, grades), ranking, assumptions,
+                    version, dataCutoffAt, horizonMonths, wonRounding);
+        }
+
+        private static Function<Financials, Scored> weightedAssessment(List<ScoreComponent> weights, List<GradeBand> bands) {
+            var components = List.copyOf(weights);
+            var grades = bands.stream().sorted(Comparator.comparing(GradeBand::minimumScore).reversed()).toList();
+            if (grades.isEmpty()
                     || grades.get(grades.size() - 1).minimumScore().signum() != 0
                     || components.stream().map(ScoreComponent::weightPercent).reduce(BigDecimal.ZERO, BigDecimal::add)
                     .compareTo(BigDecimal.valueOf(100)) != 0) {
@@ -57,12 +70,28 @@ public interface CalculationPolicy {
                     throw new IllegalArgumentException("Duplicate grade threshold");
                 }
             }
+            return f -> score(f, components, grades);
         }
+    }
+
+    private static Scored score(Financials f, List<ScoreComponent> components, List<GradeBand> grades) {
+        BigDecimal score = BigDecimal.ZERO;
+        for (var component : components) {
+            BigDecimal points = component.points().apply(f);
+            if (points == null || points.signum() < 0 || points.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new IllegalArgumentException("Expected component points between 0 and 100");
+            }
+            score = score.add(points.multiply(component.weightPercent()).movePointLeft(2));
+        }
+        for (var band : grades) {
+            if (score.compareTo(band.minimumScore()) >= 0) return new Scored(f, score, band, Map.of());
+        }
+        throw new IllegalStateException("No grade band for score");
     }
 
     record Financials(long id, BigDecimal sales, BigDecimal fixedCost, BigDecimal variableCost,
                       BigDecimal ratePercent, BigDecimal profit, BigDecimal breakEvenSales, String breakEvenStatus,
-                      BigDecimal requiredCash, BigDecimal operatingCash) {}
+                      BigDecimal requiredCash, BigDecimal operatingCash, BigDecimal occupancyCost) {}
 
-    record Scored(Financials financials, BigDecimal score, GradeBand band) {}
+    record Scored(Financials financials, BigDecimal score, GradeBand band, Map<String, Object> details) {}
 }

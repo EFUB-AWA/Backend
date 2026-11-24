@@ -139,7 +139,7 @@ class PolicyFinancialCalculatorTest {
         var ranked = calculate(rules, second, first).properties();
         assertEquals(2, ranked.get(0).recommendationRank());
         assertEquals(1, ranked.get(1).recommendationRank());
-        var noTieBreak = new Evaluation(sales, rules.openingCosts(), rules.components(), rules.grades(),
+        var noTieBreak = new Evaluation(sales, rules.openingCosts(), rules.assessment(),
                 Comparator.comparing(Scored::score), rules.assumptions(), rules.version(),
                 rules.dataCutoffAt(), rules.horizonMonths(), rules.wonRounding());
         assertThrows(IllegalArgumentException.class, () -> calculate(noTieBreak, second, first));

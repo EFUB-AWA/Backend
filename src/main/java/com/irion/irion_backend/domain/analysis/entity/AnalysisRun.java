@@ -121,7 +121,6 @@ public class AnalysisRun extends BaseEntity {
         Objects.requireNonNull(assumptionsSnapshot, "assumptionsSnapshot is required");
         Objects.requireNonNull(calculationVersion, "calculationVersion is required");
         Objects.requireNonNull(dataCutoffAt, "dataCutoffAt is required");
-        Objects.requireNonNull(horizonMonths, "horizonMonths is required");
 
         this.assumptionsSnapshot = Map.copyOf(assumptionsSnapshot);
         this.calculationVersion = calculationVersion;

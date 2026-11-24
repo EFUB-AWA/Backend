@@ -50,10 +50,11 @@ public class PolicyFinancialCalculator implements FinancialCalculator {
         var ranked = properties.stream().map(property -> {
             var financials = calculateProperty(property, rules.monthlySales().get(property.candidatePropertyId()),
                     overhead, capital, rate, rules.openingCosts());
-            return score(financials, rules);
+            return rules.assessment().apply(financials);
         }).sorted(rules.ranking()).toList();
 
         var rows = new HashMap<Long, CalculatedPropertyResult>();
+        var assessments = new HashMap<String, Object>();
         var variableCosts = new HashMap<String, String>();
         var approvedSales = new HashMap<String, String>();
         for (int i = 0; i < ranked.size(); i++) {
@@ -62,11 +63,13 @@ public class PolicyFinancialCalculator implements FinancialCalculator {
                 throw new IllegalArgumentException("Approved ranking rules must resolve ties");
             }
             Financials f = current.financials();
+            if (!current.details().isEmpty()) assessments.put(Long.toString(f.id()), current.details());
             rows.put(f.id(), toResult(current, i + 1, rules.wonRounding()));
             approvedSales.put(Long.toString(f.id()), f.sales().toPlainString());
             variableCosts.put(Long.toString(f.id()), f.variableCost().toPlainString());
         }
         var assumptions = new HashMap<>(rules.assumptions());
+        if (!assessments.isEmpty()) assumptions.put("stabilityByProperty", assessments);
         var audit = Map.of(
                 "approvedMonthlySalesWonByProperty", approvedSales,
                 "monthlyVariableCostWonByProperty", variableCosts,
@@ -82,8 +85,9 @@ public class PolicyFinancialCalculator implements FinancialCalculator {
     private static Financials calculateProperty(PropertySnapshotV1 property, BigDecimal sales, BigDecimal overhead,
                                                BigDecimal capital, BigDecimal rate, Set<OpeningCost> openingCosts) {
         if (sales.signum() < 0) throw new IllegalArgumentException("Negative monthly sales");
-        var fixed = overhead.add(amount(property.monthlyRent(), "monthlyRent"))
+        var occupancy = amount(property.monthlyRent(), "monthlyRent")
                 .add(amount(property.monthlyManagementFee(), "monthlyManagementFee"));
+        var fixed = overhead.add(occupancy);
         var fraction = rate.movePointLeft(2);
         var variable = sales.multiply(fraction);
         var profit = sales.subtract(variable).subtract(fixed);
@@ -107,22 +111,7 @@ public class PolicyFinancialCalculator implements FinancialCalculator {
             });
         }
         return new Financials(property.candidatePropertyId(), sales, fixed, variable, rate, profit,
-                threshold, status, required, capital.subtract(required));
-    }
-
-    private static Scored score(Financials f, Evaluation rules) {
-        BigDecimal score = BigDecimal.ZERO;
-        for (var component : rules.components()) {
-            BigDecimal points = component.points().apply(f);
-            if (points == null || points.signum() < 0 || points.compareTo(BigDecimal.valueOf(100)) > 0) {
-                throw new IllegalArgumentException("Expected component points between 0 and 100");
-            }
-            score = score.add(points.multiply(component.weightPercent()).movePointLeft(2));
-        }
-        for (var band : rules.grades()) {
-            if (score.compareTo(band.minimumScore()) >= 0) return new Scored(f, score, band);
-        }
-        throw new IllegalStateException("No grade band for score");
+                threshold, status, required, capital.subtract(required), occupancy);
     }
 
     private static CalculatedPropertyResult toResult(Scored scored, int rank, RoundingMode rounding) {
