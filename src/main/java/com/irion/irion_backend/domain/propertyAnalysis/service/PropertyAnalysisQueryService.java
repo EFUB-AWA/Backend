@@ -1,10 +1,10 @@
-package com.irion.irion_backend.domain.propertyAnalaysis.service;
+package com.irion.irion_backend.domain.propertyAnalysis.service;
 
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
 import com.irion.irion_backend.domain.industry.entity.Industry;
 import com.irion.irion_backend.domain.industry.repository.IndustryRepository;
-import com.irion.irion_backend.domain.propertyAnalaysis.dto.PropertyAnalysisDetailResponse;
-import com.irion.irion_backend.domain.propertyAnalaysis.repository.PropertyAnalysisQueryRepository;
+import com.irion.irion_backend.domain.propertyAnalysis.dto.PropertyAnalysisDetailResponse;
+import com.irion.irion_backend.domain.propertyAnalysis.repository.PropertyAnalysisQueryRepository;
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import static com.irion.irion_backend.domain.propertyAnalaysis.exception.PropertyAnalysisErrorCode.ANALYSIS_NOT_COMPLETED;
-import static com.irion.irion_backend.domain.propertyAnalaysis.exception.PropertyAnalysisErrorCode.PROPERTY_ANALYSIS_NOT_FOUND;
+import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.ANALYSIS_NOT_COMPLETED;
+import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.PROPERTY_ANALYSIS_NOT_FOUND;
 
 @Service
 @RequiredArgsConstructor

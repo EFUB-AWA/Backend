@@ -1,4 +1,4 @@
-package com.irion.irion_backend.domain.propertyAnalaysis.dto;
+package com.irion.irion_backend.domain.propertyAnalysis.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

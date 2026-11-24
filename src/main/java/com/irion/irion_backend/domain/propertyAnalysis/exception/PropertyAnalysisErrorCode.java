@@ -1,4 +1,4 @@
-package com.irion.irion_backend.domain.propertyAnalaysis.exception;
+package com.irion.irion_backend.domain.propertyAnalysis.exception;
 
 import com.irion.irion_backend.global.error.ErrorCode;
 import lombok.Getter;

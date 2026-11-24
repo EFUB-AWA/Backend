@@ -1,4 +1,4 @@
-package com.irion.irion_backend.domain.propertyAnalaysis.repository;
+package com.irion.irion_backend.domain.propertyAnalysis.repository;
 
 import com.irion.irion_backend.domain.analysis.entity.PropertyAnalysis;
 import org.springframework.data.jpa.repository.EntityGraph;

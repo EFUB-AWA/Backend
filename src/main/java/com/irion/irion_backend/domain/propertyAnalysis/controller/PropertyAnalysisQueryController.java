@@ -1,7 +1,7 @@
-package com.irion.irion_backend.domain.propertyAnalaysis.controller;
+package com.irion.irion_backend.domain.propertyAnalysis.controller;
 
-import com.irion.irion_backend.domain.propertyAnalaysis.dto.PropertyAnalysisDetailResponse;
-import com.irion.irion_backend.domain.propertyAnalaysis.service.PropertyAnalysisQueryService;
+import com.irion.irion_backend.domain.propertyAnalysis.dto.PropertyAnalysisDetailResponse;
+import com.irion.irion_backend.domain.propertyAnalysis.service.PropertyAnalysisQueryService;
 import com.irion.irion_backend.global.security.auth.AuthMember;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
