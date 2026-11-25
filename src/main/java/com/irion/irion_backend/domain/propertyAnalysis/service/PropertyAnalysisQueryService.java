@@ -89,9 +89,9 @@ public class PropertyAnalysisQueryService {
         }
 
         return switch (storedGrade.strip().toUpperCase(Locale.ROOT)) {
-            case "주의", "CAUTION" -> "주의";
-            case "경고", "WARNING" -> "경고";
-            case "안정", "STABLE" -> "안정";
+            case "주의", "CAUTION", "B" -> "주의";
+            case "경고", "WARNING", "C" -> "경고";
+            case "안정", "STABLE", "A" -> "안정";
             default -> null;
         };
     }
