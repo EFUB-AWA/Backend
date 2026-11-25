@@ -4,6 +4,7 @@ import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
 import com.irion.irion_backend.domain.analysis.calculation.CalculationPolicy;
 import com.irion.irion_backend.domain.analysis.calculation.AreaAverageMonthlySales;
 import com.irion.irion_backend.domain.analysis.service.AnalysisWorker;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisStatusResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
 import com.irion.irion_backend.domain.analysis.service.AnalysisFailureService;
@@ -56,6 +57,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.awaitility.Awaitility.await;
@@ -223,6 +225,12 @@ class AnalysisRunRepositoryIntegrationTest {
             failureService.fail(runId, new IllegalStateException("late failure"));
             var completed = repository.findById(runId).orElseThrow();
             assertEquals(AnalysisStatus.COMPLETED, completed.getStatus());
+            var timestamp = jdbc.queryForObject("select completed_at from analysis_runs where id = ?",
+                    LocalDateTime.class, runId);
+            assertNotNull(timestamp);
+            assertEquals(timestamp, completed.getCompletedAt());
+            assertEquals(new AnalysisStatusResponse(runId, AnalysisStatus.COMPLETED, timestamp),
+                    service.getStatus(userId, runId));
             assertEquals(Map.of("source", "test"), completed.getAssumptionsSnapshot());
             assertEquals("test-v1", completed.getCalculationVersion());
             assertEquals(cutoff, completed.getDataCutoffAt());
