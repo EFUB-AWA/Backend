@@ -7,9 +7,12 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface AnalysisRunRepository extends JpaRepository<AnalysisRun, Long> {
+    List<AnalysisRun> findByStartupCondition_User_IdOrderByCreatedAtDescIdDesc(Long userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from AnalysisRun r where r.id = :id")
     Optional<AnalysisRun> findForUpdate(@Param("id") Long id);

@@ -27,6 +27,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.test.json.JsonCompareMode;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse.AnalysisSummary;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse.PropertySummary;
+import static com.irion.irion_backend.domain.user.exception.UserErrorCode.USER_NOT_FOUND;
 import com.irion.irion_backend.global.security.jwt.JwtProperties;
 import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
 import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.ANALYSIS_NOT_COMPLETED;
@@ -91,6 +95,55 @@ class AnalysisControllerTest {
 
     @Autowired private JwtProperties jwtProperties;
     @MockitoBean private TokenBlacklistRepository blacklist;
+
+    private ResultActions history(String token) throws Exception {
+        return mvc.perform(get(PATH).header("Authorization", "Bearer " + token));
+    }
+
+    @Test
+    void historyReturnsOnlyContractFieldsIncludingExplicitNulls() throws Exception {
+        var a = new PropertySummary(11L, "first", "addr1", "A");
+        var b = new PropertySummary(12L, "second", "addr2", "B");
+        var pending = new PropertySummary(11L, "first", "addr1", null);
+        var response = new AnalysisHistoryResponse(List.of(
+                new AnalysisSummary(3L, "done", AnalysisStatus.COMPLETED, LocalDateTime.of(2026, 11, 10, 12, 0), List.of(a, b)),
+                new AnalysisSummary(2L, null, AnalysisStatus.PROCESSING, null, List.of(pending)),
+                new AnalysisSummary(1L, null, AnalysisStatus.FAILED, null, List.of(pending))));
+        when(service.getHistory(7L)).thenReturn(response);
+        history(jwt.createAccessToken(7L).token()).andExpect(status().isOk()).andExpect(content().json("""
+                {"analyses":[{"analysisRunId":3,"title":"done","status":"COMPLETED","completedAt":"2026-11-10T12:00:00",
+                "properties":[{"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":"A"},
+                {"candidatePropertyId":12,"propertyName":"second","address":"addr2","safetyGrade":"B"}]},
+                {"analysisRunId":2,"title":null,"status":"PROCESSING","completedAt":null,"properties":[
+                {"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]},
+                {"analysisRunId":1,"title":null,"status":"FAILED","completedAt":null,"properties":[
+                {"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]}]}
+                """, JsonCompareMode.STRICT));
+        verify(service).getHistory(7L);
+    }
+
+    @Test
+    void emptyHistoryAndErrors() throws Exception {
+        String token = jwt.createAccessToken(7L).token();
+        when(service.getHistory(7L)).thenReturn(new AnalysisHistoryResponse(List.of()))
+                .thenThrow(new BusinessException(USER_NOT_FOUND)).thenThrow(new IllegalStateException("lookup failed"));
+        history(token).andExpect(status().isOk()).andExpect(content().json("{\"analyses\":[]}", JsonCompareMode.STRICT));
+        history(token).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+        history(token).andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    void historyRejectsUnauthenticatedRequestsBeforeLookup() throws Exception {
+        mvc.perform(get(PATH)).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_UNAUTHORIZED"));
+        history("invalid").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
+        var expired = new JwtProvider(new JwtProperties(jwtProperties.secret(), Duration.ofSeconds(-5),
+                jwtProperties.refreshExpiration())).createAccessToken(7L);
+        history(expired.token()).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_TOKEN_EXPIRED"));
+        var loggedOut = jwt.createAccessToken(7L);
+        when(blacklist.isBlacklisted(loggedOut.jti())).thenReturn(true);
+        history(loggedOut.token()).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_LOGGED_OUT_TOKEN"));
+        verifyNoInteractions(service);
+    }
 
     private ResultActions detail(String id, String token) throws Exception {
         return mvc.perform(get(PATH + "/{id}", id).header("Authorization", "Bearer " + token));

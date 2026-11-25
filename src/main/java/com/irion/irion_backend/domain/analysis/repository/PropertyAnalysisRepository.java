@@ -3,6 +3,7 @@ package com.irion.irion_backend.domain.analysis.repository;
 import com.irion.irion_backend.domain.analysis.entity.PropertyAnalysis;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
@@ -16,4 +17,6 @@ public interface PropertyAnalysisRepository extends JpaRepository<PropertyAnalys
     Optional<PropertyAnalysis> findForConsultation(@Param("id") Long id);
 
     List<PropertyAnalysis> findByAnalysisRun_Id(Long analysisRunId);
+
+    List<PropertyAnalysis> findByAnalysisRun_IdIn(Collection<Long> runIds);
 }

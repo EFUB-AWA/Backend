@@ -31,17 +31,8 @@ public record AnalysisDetailResponse(
 
     public static AnalysisDetailResponse from(AnalysisRun run, List<PropertyAnalysis> rows) {
         var ids = run.getCandidatePropertyIds();
-        var snapshots = new HashMap<Long, PropertySnapshotV1>();
-        for (var snapshot : run.getPropertySnapshots()) {
-            Long candidateId = Objects.requireNonNull(snapshot.candidatePropertyId(), "Missing snapshot candidate ID");
-            if (snapshots.put(candidateId, snapshot) != null) {
-                throw new IllegalStateException("Duplicate property snapshot");
-            }
-        }
+        var snapshots = indexedSnapshots(run, ids);
         var expected = new HashSet<>(ids);
-        if (ids.isEmpty() || expected.size() != ids.size() || !expected.equals(snapshots.keySet())) {
-            throw new IllegalStateException("Property snapshots do not match the requested candidates");
-        }
         var summaries = new ArrayList<PropertySummary>();
         for (var row : rows) {
             Long id = row.getCandidateProperty().getId();
@@ -61,12 +52,32 @@ public record AnalysisDetailResponse(
                 run.getDataCutoffAt(), run.getHorizonMonths(), startup, List.copyOf(summaries));
     }
 
-    private static PropertySummary propertySummary(PropertyAnalysis row, Long id, PropertySnapshotV1 snapshot) {
+    static Map<Long, PropertySnapshotV1> indexedSnapshots(AnalysisRun run, List<Long> ids) {
+        var snapshots = new HashMap<Long, PropertySnapshotV1>();
+        for (var snapshot : run.getPropertySnapshots()) {
+            Long candidateId = Objects.requireNonNull(snapshot.candidatePropertyId(), "Missing snapshot candidate ID");
+            if (snapshots.put(candidateId, snapshot) != null) {
+                throw new IllegalStateException("Duplicate property snapshot");
+            }
+        }
+        var expected = new HashSet<>(ids);
+        if (ids.isEmpty() || expected.size() != ids.size() || !expected.equals(snapshots.keySet())) {
+            throw new IllegalStateException("Property snapshots do not match the requested candidates");
+        }
+        return snapshots;
+    }
+
+    static Map<String, Object> resultSnapshot(PropertyAnalysis row, Long id) {
         Map<String, Object> stored = row.getPropertySnapshot();
         if (stored == null) stored = Map.of();
         if (stored.containsKey("candidatePropertyId") && number(stored, "candidatePropertyId") != id.longValue()) {
             throw new IllegalStateException("Candidate result and snapshot IDs differ");
         }
+        return stored;
+    }
+
+    private static PropertySummary propertySummary(PropertyAnalysis row, Long id, PropertySnapshotV1 snapshot) {
+        var stored = resultSnapshot(row, id);
         var breakEven = row.getBreakEvenSales();
         if (breakEven == null && !CalculatedPropertyResult.UNREACHABLE.equals(row.getBreakEvenStatus())) {
             throw new IllegalStateException("Missing break-even sales");
@@ -78,7 +89,7 @@ public record AnalysisDetailResponse(
                 grade(row.getSafetyGrade()), row.getRecommendationRank(), row.getRecommendationReason());
     }
 
-    private static String snapshotText(Object resultValue, String runValue) {
+    static String snapshotText(Object resultValue, String runValue) {
         if (resultValue == null) return text(runValue);
         String value = text(resultValue);
         if (runValue != null && !value.equals(runValue)) throw new IllegalStateException("Conflicting property snapshots");
@@ -110,7 +121,7 @@ public record AnalysisDetailResponse(
         return value;
     }
 
-    private static String grade(String value) {
+    static String grade(String value) {
         return switch (Objects.requireNonNull(value, "Missing safety grade").strip().toUpperCase(Locale.ROOT)) {
             case "A", "STABLE", "안정" -> "A";
             case "B", "CAUTION", "주의" -> "B";

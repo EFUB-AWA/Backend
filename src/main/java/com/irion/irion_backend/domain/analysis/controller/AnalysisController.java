@@ -1,6 +1,7 @@
 package com.irion.irion_backend.domain.analysis.controller;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisStatusResponse;
@@ -30,6 +31,11 @@ import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCod
 @RequiredArgsConstructor
 public class AnalysisController {
     private final AnalysisService analysisService;
+
+    @GetMapping("/api/analyses")
+    public ResponseEntity<AnalysisHistoryResponse> getHistory(@AuthMember Long requesterId) {
+        return ResponseEntity.ok(analysisService.getHistory(requesterId));
+    }
 
     @GetMapping("/api/analyses/{analysisRunId}")
     public ResponseEntity<AnalysisDetailResponse> getDetail(@AuthMember Long requesterId, @PathVariable Long analysisRunId) {
