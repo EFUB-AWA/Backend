@@ -18,6 +18,12 @@ class AnalysisControllerDisabledTest {
     @Autowired private JwtProvider jwt;
 
     @Test
+    void defaultProfileHasNoDetailEndpoint() throws Exception {
+        mvc.perform(get("/api/analyses/100").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("API_NOT_FOUND"));
+    }
+
+    @Test
     void defaultProfileHasNoStatusEndpoint() throws Exception {
         mvc.perform(get("/api/analyses/100/status").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("API_NOT_FOUND"));

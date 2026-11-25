@@ -249,6 +249,37 @@ class AnalysisRunRepositoryIntegrationTest {
         }
 
         @Test
+        void detailReadsCommittedSnapshotsAfterSourceChanges() {
+            var runnerUp = new CalculatedPropertyResult(second, 222L, 22L, new BigDecimal("0.30"), 33L, 44L,
+                    "ACHIEVED", 55L, 66L, new BigDecimal("70"), "B", 2, "second reason");
+            complete(List.of(runnerUp, result(first, "A")));
+            TestTransaction.start();
+            try {
+                jdbc.update("update startup_conditions set total_capital=999, preferred_region_code='11680' where id=?", conditionId);
+                jdbc.update("update candidate_properties set name='changed', address='changed' where startup_condition_id=?", conditionId);
+                entityManager.clear();
+                var detail = service.getDetail(userId, runId);
+                assertEquals(100L, detail.startupCondition().totalCapital());
+                assertEquals("11440", detail.startupCondition().preferredRegionCode());
+                assertEquals(3, detail.horizonMonths());
+                assertEquals(cutoff, detail.dataCutoffAt());
+                var rows = detail.properties();
+                assertEquals(2, rows.size());
+                assertEquals(first, rows.get(0).candidatePropertyId());
+                assertEquals("first", rows.get(0).propertyName());
+                assertEquals("address", rows.get(0).address());
+                assertEquals(111L, rows.get(0).expectedMonthlySales());
+                assertEquals(second, rows.get(1).candidatePropertyId());
+                assertEquals("second", rows.get(1).propertyName());
+                assertEquals("address", rows.get(1).address());
+                assertEquals(222L, rows.get(1).expectedMonthlySales());
+            } finally {
+                TestTransaction.flagForRollback();
+                TestTransaction.end();
+            }
+        }
+
+        @Test
         void secondInsertFailureRollsBackFirstRowAndCommitsFailureSeparately() {
             assertThrows(DataIntegrityViolationException.class,
                     () -> complete(List.of(result(second, "valid"), result(first, "x".repeat(256)))));
