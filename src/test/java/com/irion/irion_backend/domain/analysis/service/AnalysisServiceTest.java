@@ -16,6 +16,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse.AnalysisSummary;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse.PropertySummary;
+import com.irion.irion_backend.domain.user.repository.UserRepository;
+import static com.irion.irion_backend.domain.user.exception.UserErrorCode.USER_NOT_FOUND;
 import com.irion.irion_backend.domain.analysis.entity.PropertyAnalysis;
 import com.irion.irion_backend.domain.analysis.entity.PropertySnapshotV1;
 import com.irion.irion_backend.domain.analysis.repository.PropertyAnalysisRepository;
@@ -37,8 +41,9 @@ class AnalysisServiceTest {
     private final AnalysisRunRepository runs = mock(AnalysisRunRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final PropertyAnalysisRepository results = mock(PropertyAnalysisRepository.class);
+    private final UserRepository users = mock(UserRepository.class);
     private final AnalysisService statusService = new AnalysisService(mock(AnalysisRequestValidator.class),
-            new AnalysisSnapshotFactory(), runs, events, results);
+            new AnalysisSnapshotFactory(), runs, events, results, users);
 
     private static final Map<String, Object> CONDITION = Map.of("industryId", 3, "preferredRegionCode", "11680",
             "totalCapital", 5_000_000_000L, "availableCapital", 70, "loanAmount", 30);
@@ -185,6 +190,116 @@ class AnalysisServiceTest {
         assertThrows(RuntimeException.class, () -> statusService.getDetail(7L, 100L));
     }
 
+    @Test
+    void historyDistinguishesUnknownUserFromEmptyHistory() {
+        assertSame(USER_NOT_FOUND, assertThrows(BusinessException.class, () -> statusService.getHistory(7L)).getErrorCode());
+        verifyNoInteractions(runs, results);
+        when(users.existsById(7L)).thenReturn(true);
+        assertEquals(List.of(), statusService.getHistory(7L).analyses());
+        verify(runs).findByStartupCondition_User_IdOrderByCreatedAtDescIdDesc(7L);
+        verifyNoInteractions(results);
+    }
+
+    private AnalysisRun historyRun(long id, AnalysisStatus status, Long... candidates) {
+        var run = completedRun(candidates);
+        when(run.getId()).thenReturn(id);
+        when(run.getStatus()).thenReturn(status);
+        return run;
+    }
+
+    @Test
+    void historyGroupsRowsWithinRunsAndPreservesBothOrders() {
+        var first = historyRun(5, AnalysisStatus.COMPLETED, 12L, 11L);
+        var pending = historyRun(4, AnalysisStatus.PROCESSING, 11L);
+        var failed = historyRun(3, AnalysisStatus.FAILED, 11L);
+        var older = historyRun(2, AnalysisStatus.COMPLETED, 11L);
+        var time = LocalDateTime.of(2026, 11, 10, 12, 0);
+        when(first.getCompletedAt()).thenReturn(time);
+        when(pending.getCompletedAt()).thenReturn(time);
+        when(failed.getCompletedAt()).thenReturn(time);
+        var a = row(11, 20, 1);
+        var b = row(12, 21, 2);
+        var c = row(11, 22, 1);
+        when(a.getAnalysisRun()).thenReturn(first);
+        when(b.getAnalysisRun()).thenReturn(first);
+        when(c.getAnalysisRun()).thenReturn(older);
+        when(c.getSafetyGrade()).thenReturn("WARNING");
+        when(b.getPropertySnapshot()).thenReturn(Map.of("address", "address12"));
+        when(users.existsById(7L)).thenReturn(true);
+        when(runs.findByStartupCondition_User_IdOrderByCreatedAtDescIdDesc(7L)).thenReturn(List.of(first, pending, failed, older));
+        var ids = List.of(5L, 4L, 3L, 2L);
+        when(results.findByAnalysisRun_IdIn(ids)).thenReturn(List.of(c, a, b));
+
+        var history = statusService.getHistory(7L).analyses();
+        assertEquals(ids, history.stream().map(AnalysisSummary::analysisRunId).toList());
+        assertEquals(List.of(new PropertySummary(12L, "name12", "address12", "A"),
+                new PropertySummary(11L, "name11", "address11", "A")), history.get(0).properties());
+        assertEquals(time, history.get(0).completedAt());
+        assertNull(history.get(3).completedAt());
+        assertEquals("C", history.get(3).properties().get(0).safetyGrade());
+        for (var summary : history.subList(1, 3)) {
+            assertNull(summary.title());
+            assertNull(summary.completedAt());
+            assertEquals(List.of(new PropertySummary(11L, "name11", "address11", null)), summary.properties());
+        }
+        verify(results).findByAnalysisRun_IdIn(ids);
+        verifyNoMoreInteractions(results);
+        verify(first, never()).getStartupCondition();
+        verify(a.getCandidateProperty(), never()).getName();
+        verify(a.getCandidateProperty(), never()).getAddress();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"A,A", "' stable ',A", "안정,A", "B,B", "CaUtIoN,B", "주의,B", "C,C", "warning,C", "경고,C"})
+    void historyNormalizesStoredGrades(String stored, String expected) {
+        var run = completedRun(11L);
+        var row = row(11, 20, 1);
+        when(row.getSafetyGrade()).thenReturn(stored);
+        assertEquals(expected, AnalysisSummary.from(run, List.of(row)).properties().get(0).safetyGrade());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null ids", "empty ids", "null id", "duplicate id", "duplicate snapshots", "absent snapshots",
+            "wrong snapshot", "missing result", "duplicate result", "extra result", "fk conflict", "name conflict",
+            "address conflict", "missing text", "null grade", "unsupported grade", "processing result", "failed result", "no status"})
+    void historyRejectsCorruptRun(String issue) {
+        var run = completedRun(11L);
+        var row = row(11, 20, 1);
+        var rows = List.of(row);
+        var snapshot = run.getPropertySnapshots().get(0);
+        switch (issue) {
+            case "null ids" -> when(run.getCandidatePropertyIds()).thenReturn(null);
+            case "empty ids" -> when(run.getCandidatePropertyIds()).thenReturn(List.of());
+            case "null id" -> when(run.getCandidatePropertyIds()).thenReturn(java.util.Collections.singletonList(null));
+            case "duplicate id" -> when(run.getCandidatePropertyIds()).thenReturn(List.of(11L, 11L));
+            case "duplicate snapshots" -> when(run.getPropertySnapshots()).thenReturn(List.of(snapshot, snapshot));
+            case "absent snapshots" -> when(run.getPropertySnapshots()).thenReturn(null);
+            case "wrong snapshot" -> when(snapshot.candidatePropertyId()).thenReturn(12L);
+            case "missing result" -> rows = List.of();
+            case "duplicate result" -> rows = List.of(row, row);
+            case "extra result" -> rows = List.of(row, row(12, 21, 2));
+            case "fk conflict" -> when(row.getPropertySnapshot()).thenReturn(Map.of("candidatePropertyId", 12));
+            case "name conflict" -> when(row.getPropertySnapshot()).thenReturn(Map.of("name", "other"));
+            case "address conflict" -> when(row.getPropertySnapshot()).thenReturn(Map.of("address", "other"));
+            case "missing text" -> when(snapshot.address()).thenReturn(null);
+            case "null grade" -> when(row.getSafetyGrade()).thenReturn(null);
+            case "unsupported grade" -> when(row.getSafetyGrade()).thenReturn("other");
+            case "processing result" -> when(run.getStatus()).thenReturn(AnalysisStatus.PROCESSING);
+            case "failed result" -> when(run.getStatus()).thenReturn(AnalysisStatus.FAILED);
+            case "no status" -> when(run.getStatus()).thenReturn(null);
+        }
+        var storedRows = rows;
+        assertThrows(RuntimeException.class, () -> AnalysisSummary.from(run, storedRows));
+    }
+
+    @Test
+    void historyPropagatesLookupFailure() {
+        when(users.existsById(7L)).thenReturn(true);
+        var error = new IllegalStateException("History lookup failed");
+        when(runs.findByStartupCondition_User_IdOrderByCreatedAtDescIdDesc(7L)).thenThrow(error);
+        assertSame(error, assertThrows(IllegalStateException.class, () -> statusService.getHistory(7L)));
+    }
+
     private AnalysisRun storedRun() {
         var owner = mock(User.class);
         var condition = mock(StartupCondition.class);
@@ -244,7 +359,7 @@ class AnalysisServiceTest {
         var validator = mock(AnalysisRequestValidator.class);
         var repository = mock(AnalysisRunRepository.class);
         var service = new AnalysisService(validator, new AnalysisSnapshotFactory(), repository,
-                mock(org.springframework.context.ApplicationEventPublisher.class), results);
+                mock(org.springframework.context.ApplicationEventPublisher.class), results, users);
         var request = new AnalysisRunRequest(1L, List.of(2L), "analysis");
         when(validator.validate(3L, request)).thenThrow(new BusinessException(code));
         assertSame(code, assertThrows(BusinessException.class, () -> service.start(3L, request)).getErrorCode());

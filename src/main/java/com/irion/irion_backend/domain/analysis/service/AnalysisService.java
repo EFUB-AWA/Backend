@@ -1,6 +1,8 @@
 package com.irion.irion_backend.domain.analysis.service;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisHistoryResponse;
+import com.irion.irion_backend.domain.user.repository.UserRepository;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisStatusResponse;
@@ -16,6 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static com.irion.irion_backend.domain.user.exception.UserErrorCode.USER_NOT_FOUND;
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.ANALYSIS_ACCESS_DENIED;
 import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode.ANALYSIS_NOT_FOUND;
 
@@ -30,7 +36,23 @@ public class AnalysisService {
     private final ApplicationEventPublisher events;
     private final PropertyAnalysisRepository properties;
 
+    private final UserRepository users;
+
     public record AnalysisStarted(Long runId) {}
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public AnalysisHistoryResponse getHistory(Long requesterId) {
+        if (!users.existsById(requesterId)) throw new BusinessException(USER_NOT_FOUND);
+        var runs = repository.findByStartupCondition_User_IdOrderByCreatedAtDescIdDesc(requesterId);
+        if (runs.isEmpty()) return new AnalysisHistoryResponse(List.of());
+
+        var ids = runs.stream().map(AnalysisRun::getId).toList();
+        var byRun = properties.findByAnalysisRun_IdIn(ids).stream()
+                .collect(Collectors.groupingBy(row -> row.getAnalysisRun().getId()));
+        return new AnalysisHistoryResponse(runs.stream()
+                .map(run -> AnalysisHistoryResponse.AnalysisSummary.from(run, byRun.getOrDefault(run.getId(), List.of())))
+                .toList());
+    }
 
     @Transactional(readOnly = true)
     public AnalysisDetailResponse getDetail(Long requesterId, Long analysisRunId) {
