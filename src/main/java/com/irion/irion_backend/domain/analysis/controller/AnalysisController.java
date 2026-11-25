@@ -1,5 +1,6 @@
 package com.irion.irion_backend.domain.analysis.controller;
 
+import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunResponse;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisStatusResponse;
@@ -29,6 +30,11 @@ import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCod
 @RequiredArgsConstructor
 public class AnalysisController {
     private final AnalysisService analysisService;
+
+    @GetMapping("/api/analyses/{analysisRunId}")
+    public ResponseEntity<AnalysisDetailResponse> getDetail(@AuthMember Long requesterId, @PathVariable Long analysisRunId) {
+        return ResponseEntity.ok(analysisService.getDetail(requesterId, analysisRunId));
+    }
 
     @GetMapping("/api/analyses/{analysisRunId}/status")
     public ResponseEntity<AnalysisStatusResponse> getStatus(@AuthMember Long requesterId,

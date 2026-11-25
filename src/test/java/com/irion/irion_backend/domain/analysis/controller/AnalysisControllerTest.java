@@ -26,6 +26,13 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.test.json.JsonCompareMode;
 
+import com.irion.irion_backend.domain.analysis.dto.AnalysisDetailResponse;
+import com.irion.irion_backend.global.security.jwt.JwtProperties;
+import com.irion.irion_backend.global.security.jwt.TokenBlacklistRepository;
+import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.ANALYSIS_NOT_COMPLETED;
+
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Stream;
@@ -80,6 +87,74 @@ class AnalysisControllerTest {
         submit("{\"startupConditionId\":1,\"candidatePropertyIds\":[]}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("EMPTY_PROPERTY_LIST"));
         verifyNoInteractions(service);
+    }
+
+    @Autowired private JwtProperties jwtProperties;
+    @MockitoBean private TokenBlacklistRepository blacklist;
+
+    private ResultActions detail(String id, String token) throws Exception {
+        return mvc.perform(get(PATH + "/{id}", id).header("Authorization", "Bearer " + token));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"A", "B", "C"})
+    void returnsFullDetailIncludingNullFields(String grade) throws Exception {
+        var condition = new AnalysisDetailResponse.StartupConditionSummary(3L, "11680", 100L, 70L, 30L, null);
+        var property = new AnalysisDetailResponse.PropertySummary(20L, 10L, "매물", "주소", 80L, -5L,
+                null, 60L, new BigDecimal("82.5"), grade, null, null);
+        when(service.getDetail(7L, 100L)).thenReturn(new AnalysisDetailResponse(100L, null, AnalysisStatus.COMPLETED,
+                null, null, null, condition, List.of(property)));
+        detail("100", jwt.createAccessToken(7L).token()).andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"analysisRunId":100,"title":null,"status":"COMPLETED","completedAt":null,
+                         "dataCutoffAt":null,"horizonMonths":null,"startupCondition":{"industryId":3,
+                         "preferredRegionCode":"11680","totalCapital":100,"availableCapital":70,
+                         "loanAmount":30,"annualInterestRate":null},"properties":[{"propertyAnalysisId":20,
+                         "candidatePropertyId":10,"propertyName":"매물","address":"주소","expectedMonthlySales":80,
+                         "monthlyOperatingProfit":-5,"breakEvenSales":null,"initialRequiredCash":60,
+                         "safetyScore":82.5,"safetyGrade":"%s","recommendationRank":null,"recommendationReason":null}]}
+                        """.formatted(grade), JsonCompareMode.STRICT));
+    }
+
+    @Test
+    void detailRequiresActiveAccessToken() throws Exception {
+        mvc.perform(get(PATH + "/100")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_UNAUTHORIZED"));
+        var expired = new JwtProvider(new JwtProperties(jwtProperties.secret(), Duration.ofSeconds(-5),
+                jwtProperties.refreshExpiration())).createAccessToken(7L);
+        var loggedOut = jwt.createAccessToken(7L);
+        when(blacklist.isBlacklisted(loggedOut.jti())).thenReturn(true);
+        detail("100", "invalid").andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
+        detail("100", expired.token()).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_TOKEN_EXPIRED"));
+        detail("100", loggedOut.token()).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_LOGGED_OUT_TOKEN"));
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "9223372036854775808"})
+    void rejectsInvalidDetailId(String id) throws Exception {
+        detail(id, jwt.createAccessToken(7L).token()).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        verifyNoInteractions(service);
+    }
+
+    static Stream<ErrorCode> detailErrors() {
+        return Stream.of(ANALYSIS_NOT_FOUND, ANALYSIS_ACCESS_DENIED, ANALYSIS_NOT_COMPLETED);
+    }
+
+    @ParameterizedTest
+    @MethodSource("detailErrors")
+    void preservesDetailError(ErrorCode error) throws Exception {
+        when(service.getDetail(7L, 100L)).thenThrow(new BusinessException(error));
+        detail("100", jwt.createAccessToken(7L).token()).andExpect(status().is(error.getStatus().value()))
+                .andExpect(jsonPath("$.code").value(error.getCode()));
+    }
+
+    @Test
+    void unexpectedDetailErrorUsesCommonResponse() throws Exception {
+        when(service.getDetail(7L, 100L)).thenThrow(new IllegalStateException("Incomplete snapshot"));
+        detail("100", jwt.createAccessToken(7L).token()).andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
     }
 
     private ResultActions requestStatus(String id) throws Exception {
