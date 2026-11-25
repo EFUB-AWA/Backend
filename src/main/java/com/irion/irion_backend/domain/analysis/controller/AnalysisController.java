@@ -2,6 +2,7 @@ package com.irion.irion_backend.domain.analysis.controller;
 
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunRequest;
 import com.irion.irion_backend.domain.analysis.dto.AnalysisRunResponse;
+import com.irion.irion_backend.domain.analysis.dto.AnalysisStatusResponse;
 import com.irion.irion_backend.domain.analysis.service.AnalysisService;
 import com.irion.irion_backend.global.common.response.ErrorResponse;
 import com.irion.irion_backend.global.error.BusinessException;
@@ -14,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +29,12 @@ import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCod
 @RequiredArgsConstructor
 public class AnalysisController {
     private final AnalysisService analysisService;
+
+    @GetMapping("/api/analyses/{analysisRunId}/status")
+    public ResponseEntity<AnalysisStatusResponse> getStatus(@AuthMember Long requesterId,
+                                                            @PathVariable Long analysisRunId) {
+        return ResponseEntity.ok(analysisService.getStatus(requesterId, analysisRunId));
+    }
 
     @PostMapping("/api/analyses")
     public ResponseEntity<AnalysisRunResponse> start(@AuthMember Long requesterId,
