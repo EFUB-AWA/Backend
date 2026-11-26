@@ -13,6 +13,15 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 public interface PropertyAnalysisRepository extends JpaRepository<PropertyAnalysis, Long> {
+    @Query("select distinct p.analysisRun.id from PropertyAnalysis p where p.id in :ids order by p.analysisRun.id")
+    List<Long> findSourceRunIds(Collection<Long> ids);
+
+    @Query("""
+        select p from PropertyAnalysis p join fetch p.analysisRun r join fetch r.startupCondition s
+        join fetch p.candidateProperty cp join fetch cp.startupCondition where p.id in :ids
+        """)
+    List<PropertyAnalysis> findComparisonSources(Collection<Long> ids);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from PropertyAnalysis p where p.analysisRun.id = :runId order by p.id")
     List<PropertyAnalysis> lockForDeletion(@Param("runId") Long runId);

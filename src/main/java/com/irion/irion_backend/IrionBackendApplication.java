@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 @EnableJpaAuditing
+@org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class IrionBackendApplication {

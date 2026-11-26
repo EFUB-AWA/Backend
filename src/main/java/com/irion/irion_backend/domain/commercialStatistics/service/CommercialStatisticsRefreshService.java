@@ -7,7 +7,6 @@ import com.irion.irion_backend.domain.commercialStatistics.repository.Statistics
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -46,7 +45,6 @@ public class CommercialStatisticsRefreshService {
     private final CommercialWorkerPopulationService workerPopulationService;
     private final CommercialConsumptionService consumptionService;
 
-    @Scheduled(initialDelayString = "PT0S", fixedDelayString = "${seoul-open-api.refresh-interval:PT24H}")
     public void refreshStatistics() {
         if (properties.apiKey() == null || properties.apiKey().isBlank()) {
             return;

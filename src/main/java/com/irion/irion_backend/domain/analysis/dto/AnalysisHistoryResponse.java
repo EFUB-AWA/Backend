@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 
 public record AnalysisHistoryResponse(List<AnalysisSummary> analyses) {
-    public record PropertySummary(Long candidatePropertyId, String propertyName, String address, String safetyGrade) {}
+    public record PropertySummary(Long propertyAnalysisId, Long candidatePropertyId, String propertyName, String address, String safetyGrade) {}
 
     public record AnalysisSummary(Long analysisRunId, String title, AnalysisStatus status,
                                   LocalDateTime completedAt, List<PropertySummary> properties) {
@@ -44,7 +44,7 @@ public record AnalysisHistoryResponse(List<AnalysisSummary> analyses) {
                     address = stored.get("address");
                     grade = AnalysisDetailResponse.grade(row.getSafetyGrade());
                 }
-                properties.add(new PropertySummary(id, AnalysisDetailResponse.snapshotText(name, snapshot.name()),
+                properties.add(new PropertySummary(completed ? byCandidate.get(id).getId() : null, id, AnalysisDetailResponse.snapshotText(name, snapshot.name()),
                         AnalysisDetailResponse.snapshotText(address, snapshot.address()), grade));
             }
             return new AnalysisSummary(run.getId(), run.getTitle(), run.getStatus(),

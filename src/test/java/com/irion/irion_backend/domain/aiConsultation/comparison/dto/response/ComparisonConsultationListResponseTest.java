@@ -70,7 +70,7 @@ public class ComparisonConsultationListResponseTest {
         ComparisonConsultation consultation = mock(ComparisonConsultation.class);
 
         when(consultation.getId()).thenReturn(id);
-        when(consultation.getAnalysisRunId()).thenReturn(id);
+        when(consultation.getRecommendedPropertyAnalysisId()).thenReturn(id);
 
         return consultation;
     }

@@ -286,15 +286,15 @@ class AnalysisServiceTest {
 
         var history = statusService.getHistory(7L).analyses();
         assertEquals(ids, history.stream().map(AnalysisSummary::analysisRunId).toList());
-        assertEquals(List.of(new PropertySummary(12L, "name12", "address12", "A"),
-                new PropertySummary(11L, "name11", "address11", "A")), history.get(0).properties());
+        assertEquals(List.of(new PropertySummary(b.getId(), 12L, "name12", "address12", "A"),
+                new PropertySummary(a.getId(), 11L, "name11", "address11", "A")), history.get(0).properties());
         assertEquals(time, history.get(0).completedAt());
         assertNull(history.get(3).completedAt());
         assertEquals("C", history.get(3).properties().get(0).safetyGrade());
         for (var summary : history.subList(1, 3)) {
             assertNull(summary.title());
             assertNull(summary.completedAt());
-            assertEquals(List.of(new PropertySummary(11L, "name11", "address11", null)), summary.properties());
+            assertEquals(List.of(new PropertySummary(null, 11L, "name11", "address11", null)), summary.properties());
         }
         verify(results).findByAnalysisRun_IdIn(ids);
         verifyNoMoreInteractions(results);
