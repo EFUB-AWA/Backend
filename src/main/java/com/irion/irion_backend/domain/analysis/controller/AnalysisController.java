@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +32,12 @@ import static com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCod
 @RequiredArgsConstructor
 public class AnalysisController {
     private final AnalysisService analysisService;
+
+    @DeleteMapping("/api/analyses/{analysisRunId}")
+    public ResponseEntity<Void> delete(@AuthMember Long requesterId, @PathVariable Long analysisRunId) {
+        analysisService.delete(requesterId, analysisRunId);
+        return ResponseEntity.noContent().build();
+    }
 
     @GetMapping("/api/analyses")
     public ResponseEntity<AnalysisHistoryResponse> getHistory(@AuthMember Long requesterId) {

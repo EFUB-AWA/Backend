@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -16,6 +17,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AnalysisControllerDisabledTest {
     @Autowired private MockMvc mvc;
     @Autowired private JwtProvider jwt;
+
+    @Test
+    void defaultProfileHasNoDeleteEndpoint() throws Exception {
+        mvc.perform(delete("/api/analyses/100").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("API_NOT_FOUND"));
+    }
 
     @Test
     void defaultProfileHasNoHistoryEndpoint() throws Exception {

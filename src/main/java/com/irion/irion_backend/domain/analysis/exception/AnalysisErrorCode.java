@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum AnalysisErrorCode implements ErrorCode {
 
+    ANALYSIS_IN_PROGRESS(HttpStatus.CONFLICT, "진행 중인 분석은 삭제할 수 없습니다."),
+    PROPERTY_CONSULTATION_IN_PROGRESS(HttpStatus.CONFLICT, "매물 AI 컨설팅이 진행 중입니다."),
+
     INVALID_ANALYSIS_REQUEST(HttpStatus.BAD_REQUEST, "분석 요청이 올바르지 않습니다."),
     ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "분석 정보를 찾을 수 없습니다."),
     EMPTY_PROPERTY_LIST(HttpStatus.BAD_REQUEST, "분석 대상 매물을 하나 이상 선택해야 합니다."),

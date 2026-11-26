@@ -61,6 +61,46 @@ class AnalysisControllerTest {
     @Autowired private MockMvc mvc;
     @Autowired private JwtProvider jwt;
     @MockitoBean private AnalysisService service;
+
+    @Test
+    void deleteReturnsEmpty204() throws Exception {
+        mvc.perform(delete(PATH + "/42").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().isNoContent()).andExpect(content().string(""));
+        verify(service).delete(7L, 42L);
+    }
+
+    @Test
+    void deleteRequiresAuthentication() throws Exception {
+        mvc.perform(delete(PATH + "/42")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_UNAUTHORIZED"));
+        mvc.perform(delete(PATH + "/42").header("Authorization", "Bearer invalid")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_INVALID_TOKEN"));
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "9223372036854775808"})
+    void deleteRejectsInvalidLong(String id) throws Exception {
+        mvc.perform(delete(PATH + "/" + id).header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_TYPE"));
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = AnalysisErrorCode.class, names = {"ANALYSIS_ACCESS_DENIED", "ANALYSIS_NOT_FOUND",
+            "ANALYSIS_IN_PROGRESS", "PROPERTY_CONSULTATION_IN_PROGRESS"})
+    void deleteReturnsBusinessError(AnalysisErrorCode error) throws Exception {
+        doThrow(new BusinessException(error)).when(service).delete(7L, 42L);
+        mvc.perform(delete(PATH + "/42").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().is(error.getStatus().value())).andExpect(jsonPath("$.code").value(error.getCode()));
+    }
+
+    @Test
+    void deleteReturnsCommonInternalError() throws Exception {
+        doThrow(new IllegalStateException()).when(service).delete(7L, 42L);
+        mvc.perform(delete(PATH + "/42").header("Authorization", "Bearer " + jwt.createAccessToken(7L).token()))
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
     @MockitoBean private FinancialCalculator calculator;
 
     private ResultActions submit(String body) throws Exception {

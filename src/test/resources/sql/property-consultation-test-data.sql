@@ -168,7 +168,7 @@ VALUES
 -- 분석 실행 (회원별 1회)
 
 -- 요청 ID 순서대로 원본 매물에서 PropertySnapshotV1 배열을 만든다.
-CREATE FUNCTION pg_temp.fixture_property_snapshots(requested_ids jsonb)
+CREATE OR REPLACE FUNCTION pg_temp.fixture_property_snapshots(requested_ids jsonb)
 RETURNS jsonb LANGUAGE sql STABLE
 RETURN (
     SELECT jsonb_agg(jsonb_build_object(

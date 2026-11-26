@@ -41,7 +41,7 @@ public class PropertyConsultationTransactions {
     }
 
     public Reservation reserveRetry(Long requesterId, Long consultationId, Long analysisId) {
-        var consultation = consultations.findForRetry(consultationId)
+        var consultation = consultations.findForUpdate(consultationId)
                 .orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND));
         var analysis = consultation.getPropertyAnalysis();
         requireOwner(requesterId, analysis);
@@ -81,13 +81,13 @@ public class PropertyConsultationTransactions {
     }
 
     public PropertyConsultationDetailResponse complete(Long id, ConsultationAiClient.Result result) {
-        var consultation = consultations.findById(id).orElseThrow();
+        var consultation = consultations.findForUpdate(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND));
         consultation.complete(result.summary(), result.risks(), result.suggestions(), result.considerations(),
                 result.model(), result.promptVersion());
         return PropertyConsultationDetailResponse.from(consultation);
     }
 
     public void fail(Long id) {
-        consultations.findById(id).orElseThrow().fail();
+        consultations.findForUpdate(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND)).fail();
     }
 }

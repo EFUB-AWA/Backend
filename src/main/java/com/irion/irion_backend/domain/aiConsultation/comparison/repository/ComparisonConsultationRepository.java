@@ -16,16 +16,14 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
 
     @Query("""
             SELECT c FROM ComparisonConsultation c
-            JOIN c.analysisRun a JOIN a.startupCondition s
-            WHERE s.user.id = :requesterId and c.id = :comparisonConsultationId
+            WHERE c.user.id = :requesterId and c.id = :comparisonConsultationId
         """)
     Optional<ComparisonConsultation> findOwnedById(@Param("comparisonConsultationId") Long comparisonConsultationId,
                                                    @Param("requesterId") Long requesterId);
 
     @Query("""
         SELECT c FROM ComparisonConsultation c
-        JOIN c.analysisRun a JOIN a.startupCondition s
-        WHERE s.user.id = :requesterId and c.saved = true
+        WHERE c.user.id = :requesterId and c.saved = true
         ORDER BY c.id DESC
     """)
     List<ComparisonConsultation> findSavedFirstPage(@Param("requesterId") Long requesterId,
@@ -33,8 +31,7 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
 
     @Query("""
         SELECT c FROM ComparisonConsultation c
-        JOIN c.analysisRun a JOIN a.startupCondition s
-        WHERE s.user.id = :requesterId and c.saved = true and c.id < :cursor
+        WHERE c.user.id = :requesterId and c.saved = true and c.id < :cursor
         ORDER BY c.id DESC
     """)
     List<ComparisonConsultation> findSavedNextPage(@Param("requesterId") Long requesterId,

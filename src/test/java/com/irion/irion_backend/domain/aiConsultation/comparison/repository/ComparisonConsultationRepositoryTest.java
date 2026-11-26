@@ -3,6 +3,8 @@ package com.irion.irion_backend.domain.aiConsultation.comparison.repository;
 import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
 import com.irion.irion_backend.domain.aiConsultation.comparison.entity.ComparisonConsultation;
 import com.irion.irion_backend.domain.aiConsultation.comparison.entity.PropertySnapshot;
+import com.irion.irion_backend.domain.aiConsultation.comparison.service.ComparisonConsultationService;
+import jakarta.persistence.EntityManager;
 import com.irion.irion_backend.global.config.TestcontainersConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,16 +23,41 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
-@Import(TestcontainersConfig.class)
+@Import({TestcontainersConfig.class, ComparisonConsultationService.class})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Sql({"/sql/property-consultation-test-data.sql", "/sql/comparison-consultation-test-data.sql"})
 public class ComparisonConsultationRepositoryTest {
 
     @Autowired
     private ComparisonConsultationRepository comparisonConsultationRepository;
+    @Autowired private ComparisonConsultationService service;
+    @Autowired private EntityManager entityManager;
 
     private static final Long OWNER_ID = 9001L;
     private static final Long COMPLETED_CONSULTATION_ID = 9001L;
+
+    @Test
+    void deletingOriginalRunsPreservesHistoricalReadsAndSaving() {
+        var detail = service.getComparisonConsultation(OWNER_ID, 9001L);
+        var list = service.getComparisonConsultations(OWNER_ID, null, 10);
+        assertThat(detail.analysisRunId()).isEqualTo(9003L);
+        assertThat(detail.summary()).isNotBlank();
+        assertThat(entityManager.createNativeQuery("delete from analysis_runs where id in (9003, 9004)")
+                .executeUpdate()).isEqualTo(2);
+        entityManager.clear();
+
+        assertThat(service.getComparisonConsultation(OWNER_ID, 9001L)).isEqualTo(detail);
+        assertThat(service.getComparisonConsultations(OWNER_ID, null, 10)).isEqualTo(list);
+        assertThat(comparisonConsultationRepository.findOwnedById(9001L, 9002L)).isEmpty();
+        var historical = comparisonConsultationRepository.findById(9001L).orElseThrow().getPropertySnapshots().get(0);
+        assertThat(historical.deposit()).isEqualTo(30000000L);
+        assertThat(historical.financialResult().expectedMonthlySales()).isEqualTo(9000000L);
+        assertThat(historical.financialResult().recommendationReason()).isEqualTo("fixture reason");
+
+        var saved = service.saveComparisonConsultation(OWNER_ID, 9002L);
+        assertThat(service.saveComparisonConsultation(OWNER_ID, 9002L)).isEqualTo(saved);
+        assertThat(service.getComparisonConsultation(OWNER_ID, 9002L).analysisRunId()).isEqualTo(9004L);
+    }
 
     // ----- findOwnedById ----- //
 

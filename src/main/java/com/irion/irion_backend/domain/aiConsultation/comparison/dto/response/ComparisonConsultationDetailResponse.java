@@ -24,7 +24,7 @@ public record ComparisonConsultationDetailResponse(
 
         return new ComparisonConsultationDetailResponse(
                 consultation.getId(),
-                consultation.getAnalysisRun().getId(),
+                consultation.getAnalysisRunId(),
                 toProperties(consultation.getPropertySnapshots()),
                 completed ? consultation.getSummary() : null,
                 completed ? consultation.getDescription() : null,
