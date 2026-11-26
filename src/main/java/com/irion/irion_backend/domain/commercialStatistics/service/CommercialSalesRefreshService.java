@@ -5,7 +5,6 @@ import com.irion.irion_backend.domain.commercialStatistics.repository.Commercial
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -25,7 +24,6 @@ public class CommercialSalesRefreshService {
     private final CommercialStatisticsCacheRepository cacheRepository;
     private final SeoulOpenApiProperties properties;
 
-    @Scheduled(initialDelayString = "PT0S", fixedDelayString = "${seoul-open-api.refresh-interval:PT24H}")
     public void refreshSales() {
         if (properties.apiKey() == null || properties.apiKey().isBlank()) {
             return;

@@ -16,11 +16,11 @@ INSERT INTO property_analyses (id,analysis_run_id,candidate_property_id,property
 INSERT INTO property_ai_consultations (id,property_analysis_id,status,created_at,updated_at)
     VALUES (9101,9101,'COMPLETED',now(),now());
 
-INSERT INTO comparison_ai_consultations (id,analysis_run_id,user_id,property_snapshots,is_saved,status,summary,
+INSERT INTO comparison_ai_consultations (id,user_id,property_snapshots,is_saved,status,summary,
     description,pros_and_cons,saved_at,expires_at,created_at,updated_at)
-    VALUES (1,9001,9001,'[{"propertyId":9001,"name":"historic","financialResult":{"recommendationRank":1}}]',
+    VALUES (1, 9001, '[{"analysisRunId":9001,"propertyId":9001,"name":"historic","financialResult":{"recommendationRank":1}}]',
     true,'COMPLETED','summary','description','pros',now(),null,now(),now()),
-    (2,9010,9001,'[{"propertyId":9002,"name":"temporary"}]',false,'COMPLETED','temporary',null,null,null,
+    (2, 9001, '[{"analysisRunId":9010,"propertyId":9002,"name":"temporary"}]',false,'COMPLETED','temporary',null,null,null,
     now()+interval '1 day',now(),now());
 INSERT INTO external_data_snapshots (id,source_name,dataset_code,reference_year,fetched_at,processing_version,
     data_payload,created_at,updated_at) VALUES (7,'test','shared',2025,now(),'v1','{}',now(),now());

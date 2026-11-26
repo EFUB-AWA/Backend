@@ -8,17 +8,17 @@ import java.util.List;
 
 public record ComparisonConsultationSummaryResponse(
         Long comparisonConsultId,
-        Long analysisRunId,
+        Long recommendedPropertyAnalysisId,
         List<ComparedPropertyResponse> properties,
-        LocalDateTime completedAt
+        LocalDateTime completedAt, LocalDateTime savedAt
 ) {
 
     public static ComparisonConsultationSummaryResponse from(ComparisonConsultation consultation) {
         return new ComparisonConsultationSummaryResponse(
                 consultation.getId(),
-                consultation.getAnalysisRunId(),
+                consultation.getRecommendedPropertyAnalysisId(),
                 toProperties(consultation.getPropertySnapshots()),
-                consultation.getCompletedAt()
+                consultation.getCompletedAt(), consultation.getSavedAt()
         );
     }
 

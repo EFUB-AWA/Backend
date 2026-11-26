@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ConsultationErrorCode implements ErrorCode {
 
+    INVALID_COMPARISON_SELECTION(HttpStatus.BAD_REQUEST, "서로 다른 매물 분석 2~3개를 선택해 주세요."),
+    CONSULTATION_NOT_PENDING(HttpStatus.CONFLICT, "이미 종료된 비교 컨설팅입니다."),
     PROPERTY_ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "후보 매물 분석이 존재하지 않습니다."),
     CONSULTATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     ANALYSIS_NOT_READY(HttpStatus.CONFLICT, "컨설팅에 필요한 분석 결과가 준비되지 않았습니다."),

@@ -142,9 +142,9 @@ class AnalysisControllerTest {
 
     @Test
     void historyReturnsOnlyContractFieldsIncludingExplicitNulls() throws Exception {
-        var a = new PropertySummary(11L, "first", "addr1", "A");
-        var b = new PropertySummary(12L, "second", "addr2", "B");
-        var pending = new PropertySummary(11L, "first", "addr1", null);
+        var a = new PropertySummary(21L, 11L, "first", "addr1", "A");
+        var b = new PropertySummary(22L, 12L, "second", "addr2", "B");
+        var pending = new PropertySummary(null, 11L, "first", "addr1", null);
         var response = new AnalysisHistoryResponse(List.of(
                 new AnalysisSummary(3L, "done", AnalysisStatus.COMPLETED, LocalDateTime.of(2026, 11, 10, 12, 0), List.of(a, b)),
                 new AnalysisSummary(2L, null, AnalysisStatus.PROCESSING, null, List.of(pending)),
@@ -152,12 +152,12 @@ class AnalysisControllerTest {
         when(service.getHistory(7L)).thenReturn(response);
         history(jwt.createAccessToken(7L).token()).andExpect(status().isOk()).andExpect(content().json("""
                 {"analyses":[{"analysisRunId":3,"title":"done","status":"COMPLETED","completedAt":"2026-11-10T12:00:00",
-                "properties":[{"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":"A"},
-                {"candidatePropertyId":12,"propertyName":"second","address":"addr2","safetyGrade":"B"}]},
+                "properties":[{"propertyAnalysisId":21,"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":"A"},
+                {"propertyAnalysisId":22,"candidatePropertyId":12,"propertyName":"second","address":"addr2","safetyGrade":"B"}]},
                 {"analysisRunId":2,"title":null,"status":"PROCESSING","completedAt":null,"properties":[
-                {"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]},
+                {"propertyAnalysisId":null,"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]},
                 {"analysisRunId":1,"title":null,"status":"FAILED","completedAt":null,"properties":[
-                {"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]}]}
+                {"propertyAnalysisId":null,"candidatePropertyId":11,"propertyName":"first","address":"addr1","safetyGrade":null}]}]}
                 """, JsonCompareMode.STRICT));
         verify(service).getHistory(7L);
     }

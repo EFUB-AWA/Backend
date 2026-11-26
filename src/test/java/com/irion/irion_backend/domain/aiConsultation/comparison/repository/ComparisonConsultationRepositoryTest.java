@@ -30,6 +30,10 @@ public class ComparisonConsultationRepositoryTest {
 
     @Autowired
     private ComparisonConsultationRepository comparisonConsultationRepository;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.irion.irion_backend.domain.aiConsultation.comparison.client.ComparisonConsultationAiClient ai;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.irion.irion_backend.domain.aiConsultation.comparison.service.ComparisonConsultationTransactions transactions;
     @Autowired private ComparisonConsultationService service;
     @Autowired private EntityManager entityManager;
 
@@ -40,7 +44,7 @@ public class ComparisonConsultationRepositoryTest {
     void deletingOriginalRunsPreservesHistoricalReadsAndSaving() {
         var detail = service.getComparisonConsultation(OWNER_ID, 9001L);
         var list = service.getComparisonConsultations(OWNER_ID, null, 10);
-        assertThat(detail.analysisRunId()).isEqualTo(9003L);
+        assertThat(detail.properties().get(0).analysisRunId()).isEqualTo(9003L);
         assertThat(detail.summary()).isNotBlank();
         assertThat(entityManager.createNativeQuery("delete from analysis_runs where id in (9003, 9004)")
                 .executeUpdate()).isEqualTo(2);
@@ -56,7 +60,7 @@ public class ComparisonConsultationRepositoryTest {
 
         var saved = service.saveComparisonConsultation(OWNER_ID, 9002L);
         assertThat(service.saveComparisonConsultation(OWNER_ID, 9002L)).isEqualTo(saved);
-        assertThat(service.getComparisonConsultation(OWNER_ID, 9002L).analysisRunId()).isEqualTo(9004L);
+        assertThat(service.getComparisonConsultation(OWNER_ID, 9002L).properties().get(0).analysisRunId()).isEqualTo(9004L);
     }
 
     // ----- findOwnedById ----- //

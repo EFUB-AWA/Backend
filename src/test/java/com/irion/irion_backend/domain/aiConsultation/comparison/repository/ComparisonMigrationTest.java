@@ -107,6 +107,100 @@ class ComparisonMigrationTest {
         }
     }
 
+    @Test
+    void crossRunMigrationPreservesHistoryAndOrphanedSnapshots() throws Exception {
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = connection.createStatement()) {
+            sql.execute(migration);
+            sql.execute("delete from property_analyses where analysis_run_id=4");
+            sql.execute("delete from analysis_runs where id=4");
+            sql.execute("update property_analyses set monthly_fixed_cost=33, expected_monthly_sales=999 where analysis_run_id=3");
+            String old = scalar(sql,"select jsonb_agg(to_jsonb(c)-'analysis_run_id'-'property_snapshots' order by id) from comparison_ai_consultations c");
+            sql.execute(Files.readString(Path.of("db/manual/05-support-cross-analysis-comparisons.sql")));
+            assertThat(scalar(sql,"""
+                    select jsonb_agg(to_jsonb(c)-'property_snapshots'-'comparison_key'-'risk_factors'-'positive_factors'
+                        -'recommended_contract_conditions'-'condition_differences'-'recommended_property_analysis_id' order by id)
+                    from comparison_ai_consultations c
+                    """)).isEqualTo(old);
+            assertThat(scalar(sql,"""
+                    select comparison_key='1:2' and property_snapshots #>> '{0,propertyAnalysisId}'='2'
+                        and property_snapshots #>> '{1,propertyAnalysisId}'='1' and property_snapshots #>> '{0,name}'='old'
+                        and property_snapshots #>> '{0,analysisRunId}'='3' and property_snapshots #>> '{1,analysisRunId}'='3'
+                        and property_snapshots #>> '{0,financialResult,monthlyFixedCost}'='33'
+                        and property_snapshots #>> '{0,financialResult,expectedMonthlySales}'='150'
+                    from comparison_ai_consultations where id=5
+                    """)).isEqualTo("t");
+            assertThat(scalar(sql,"""
+                    select comparison_key is null and property_snapshots #>> '{0,propertyAnalysisId}' is null
+                        and property_snapshots #>> '{0,analysisRunId}'='4'
+                        and property_snapshots #>> '{0,financialResult,expectedMonthlySales}'='200'
+                    from comparison_ai_consultations where id=6
+                    """)).isEqualTo("t");
+            assertThat(scalar(sql,"select count(*) from information_schema.columns where table_name='comparison_ai_consultations' and column_name='analysis_run_id'")).isEqualTo("0");
+            assertThatThrownBy(() -> sql.execute("update comparison_ai_consultations set comparison_key='1:2' where id=6"))
+                    .isInstanceOf(SQLException.class).hasMessageContaining("uq_comparison_user_key");
+            sql.execute("insert into users(id,login_email,nickname,kakao_id,created_at,updated_at) values(2,'b@example.test','b',2,now(),now())");
+            sql.execute("update comparison_ai_consultations set user_id=2, comparison_key='1:2' where id=6");
+            sql.execute("delete from property_analyses where analysis_run_id=3");
+            sql.execute("delete from analysis_runs where id=3");
+        }
+    }
+
+    @Test
+    void invalidLegacyArrayRollsBackEntireCrossRunMigration() throws Exception {
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = connection.createStatement()) {
+            sql.execute(migration);
+            sql.execute("update comparison_ai_consultations set property_snapshots=property_snapshots||property_snapshots where id=6");
+            String before = scalar(sql,"select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c");
+            assertThatThrownBy(() -> sql.execute(Files.readString(Path.of("db/manual/05-support-cross-analysis-comparisons.sql"))))
+                    .isInstanceOf(SQLException.class).hasMessageContaining("Duplicate comparison candidate");
+            sql.execute("rollback");
+            assertThat(scalar(sql,"select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c")).isEqualTo(before);
+            assertThat(scalar(sql,"select count(*) from information_schema.columns where table_name='comparison_ai_consultations' and column_name='comparison_key'")).isEqualTo("0");
+        }
+    }
+
+    @Test
+    void duplicateRecoveredKeysAbortWithoutMergingLegacyRows() throws Exception {
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = connection.createStatement()) {
+            sql.execute(migration);
+            // Model a deployment in which the legacy run uniqueness constraint had been removed.
+            sql.execute("alter table comparison_ai_consultations drop constraint ukfy324ab37l17kxn7veha7eun0");
+            sql.execute("""
+                    update comparison_ai_consultations set analysis_run_id=3,
+                        property_snapshots=(select property_snapshots from comparison_ai_consultations where id=5)
+                    where id=6
+                    """);
+            String before = scalar(sql,"select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c");
+            assertThatThrownBy(() -> sql.execute(Files.readString(Path.of("db/manual/05-support-cross-analysis-comparisons.sql"))))
+                    .isInstanceOf(SQLException.class).hasMessageContaining("uq_comparison_user_key");
+            sql.execute("rollback");
+            assertThat(scalar(sql,"select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c")).isEqualTo(before);
+        }
+    }
+
+    @Test
+    void mismatchedOwnerRollsBackAllBackfillAndDdl() throws Exception {
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = connection.createStatement()) {
+            sql.execute(migration);
+            sql.execute("insert into users(id,login_email,nickname,kakao_id,created_at,updated_at) values(2,'b@example.test','b',2,now(),now())");
+            sql.execute("update comparison_ai_consultations set user_id=2 where id=6");
+            String rows = "select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c";
+            String constraints = "select jsonb_agg(pg_get_constraintdef(oid) order by conname) from pg_constraint where conrelid='comparison_ai_consultations'::regclass";
+            String before = scalar(sql,rows);
+            String beforeConstraints = scalar(sql,constraints);
+            assertThatThrownBy(() -> sql.execute(Files.readString(Path.of("db/manual/05-support-cross-analysis-comparisons.sql"))))
+                    .isInstanceOf(SQLException.class).hasMessageContaining("Comparison source owner mismatch");
+            sql.execute("rollback");
+            assertThat(scalar(sql,rows)).isEqualTo(before);
+            assertThat(scalar(sql,constraints)).isEqualTo(beforeConstraints);
+            assertThat(scalar(sql,"select analysis_run_id from comparison_ai_consultations where id=6")).isEqualTo("4");
+        }
+    }
+
     private String scalar(Statement sql, String query) throws SQLException {
         try (var result = sql.executeQuery(query)) {
             result.next();

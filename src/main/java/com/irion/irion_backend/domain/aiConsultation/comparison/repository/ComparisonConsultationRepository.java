@@ -15,6 +15,30 @@ import java.util.Optional;
 public interface ComparisonConsultationRepository extends JpaRepository<ComparisonConsultation, Long> {
 
     @Query("""
+        select c from ComparisonConsultation c where c.user.id = :owner and c.comparisonKey = :key
+        and (c.saved = true or c.status = PENDING or c.expiresAt is null or c.expiresAt > :now)
+        """)
+    Optional<ComparisonConsultation> reusable(Long owner, String key, LocalDateTime now);
+
+    @Modifying
+    @Query("""
+        delete from ComparisonConsultation c where c.user.id = :owner and c.comparisonKey = :key
+        and c.saved = false and c.status <> PENDING and c.expiresAt <= :now
+        """)
+    int removeExpiredKey(Long owner, String key, LocalDateTime now);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ComparisonConsultation c where c.id = :id")
+    Optional<ComparisonConsultation> lockById(Long id);
+
+    @Modifying
+    @Query("""
+        update ComparisonConsultation c set c.status = FAILED, c.completedAt = null, c.expiresAt = :expires,
+        c.updatedAt = :now where c.status = PENDING and c.saved = false and c.createdAt < :cutoff
+        """)
+    int recoverPending(LocalDateTime cutoff, LocalDateTime now, LocalDateTime expires);
+
+    @Query("""
             SELECT c FROM ComparisonConsultation c
             WHERE c.user.id = :requesterId and c.id = :comparisonConsultationId
         """)
@@ -43,7 +67,7 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
         UPDATE ComparisonConsultation c
         SET c.saved = true, c.savedAt = :now, c.updatedAt = :now
         WHERE c.id = :id AND c.saved = false AND c.status = :status
-        AND (c.expiresAt IS NULL OR c.expiresAt >= :now)
+        AND (c.expiresAt IS NULL OR c.expiresAt > :now)
     """)
     int updateSaved(@Param("id") Long consultationId, @Param("now") LocalDateTime now,
                     @Param("status") ConsultationStatus status);
@@ -51,7 +75,7 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
     @Modifying(clearAutomatically = true)
     @Query("""
         DELETE FROM ComparisonConsultation c
-        WHERE c.saved = false AND c.expiresAt < :now
+        WHERE c.saved = false AND c.status <> PENDING AND c.expiresAt <= :now
     """)
     int deleteExpired(@Param("now") LocalDateTime now);
 }

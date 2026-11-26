@@ -5,6 +5,14 @@ import com.irion.irion_backend.domain.aiConsultation.comparison.dto.response.Com
 import com.irion.irion_backend.domain.aiConsultation.comparison.dto.response.ComparisonConsultationSaveResponse;
 import com.irion.irion_backend.domain.aiConsultation.comparison.service.ComparisonConsultationService;
 import com.irion.irion_backend.global.security.auth.AuthMember;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
+import com.irion.irion_backend.domain.aiConsultation.comparison.dto.ComparisonConsultationCreateRequest;
+import com.irion.irion_backend.domain.aiConsultation.comparison.exception.ComparisonGenerationException;
+import com.irion.irion_backend.global.common.response.ErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +25,25 @@ import org.springframework.web.bind.annotation.*;
 public class ComparisonConsultationController {
 
     private final ComparisonConsultationService comparisonConsultationService;
+
+    record FailedConsultation(Long comparisonConsultId, ConsultationStatus status) {}
+    record GenerationError(@JsonUnwrapped ErrorResponse errorResponse, FailedConsultation data) {}
+
+    @ExceptionHandler(ComparisonGenerationException.class)
+    ResponseEntity<GenerationError> handleGenerationFailure(ComparisonGenerationException failure,
+                                                          HttpServletRequest request) {
+        var code = failure.getErrorCode();
+        var error = ErrorResponse.of(code, request.getRequestURI());
+        var data = new FailedConsultation(failure.getComparisonConsultId(), ConsultationStatus.FAILED);
+        return ResponseEntity.status(code.getStatus()).body(new GenerationError(error, data));
+    }
+
+    @PostMapping
+    public ResponseEntity<ComparisonConsultationDetailResponse> create(@AuthMember Long requesterId,
+            @Valid @RequestBody ComparisonConsultationCreateRequest request) {
+        var creation = comparisonConsultationService.create(requesterId, request.propertyAnalysisIds());
+        return ResponseEntity.status(creation.created() ? HttpStatus.CREATED : HttpStatus.OK).body(creation.detail());
+    }
 
     @GetMapping("/{comparisonConsultId}")
     public ResponseEntity<ComparisonConsultationDetailResponse> getComparisonConsultation(@AuthMember Long requesterId,
