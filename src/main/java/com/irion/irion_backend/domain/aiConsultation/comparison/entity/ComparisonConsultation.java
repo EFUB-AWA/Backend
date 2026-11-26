@@ -1,7 +1,7 @@
 package com.irion.irion_backend.domain.aiConsultation.comparison.entity;
 
 import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
-import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
+import com.irion.irion_backend.domain.user.entity.User;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -23,9 +23,12 @@ public class ComparisonConsultation extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "analysis_run_id", nullable = false, unique = true)
-    private AnalysisRun analysisRun;
+    @Column(name = "analysis_run_id", nullable = false, unique = true, updatable = false)
+    private Long analysisRunId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private User user;
 
     @Column(name = "property_snapshots", columnDefinition = "jsonb", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)

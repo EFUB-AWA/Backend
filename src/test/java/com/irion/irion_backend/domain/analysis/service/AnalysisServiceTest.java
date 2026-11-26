@@ -5,6 +5,9 @@ import com.irion.irion_backend.domain.analysis.exception.AnalysisErrorCode;
 import com.irion.irion_backend.domain.analysis.repository.AnalysisRunRepository;
 import com.irion.irion_backend.global.error.BusinessException;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
+import com.irion.irion_backend.domain.aiConsultation.property.repository.PropertyConsultationRepository;
+import com.irion.irion_backend.domain.aiConsultation.property.entity.PropertyConsultation;
+import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationStatus;
 import com.irion.irion_backend.domain.analysis.entity.AnalysisStatus;
 import com.irion.irion_backend.domain.startupCondition.entity.StartupCondition;
 import com.irion.irion_backend.domain.user.entity.User;
@@ -42,8 +45,59 @@ class AnalysisServiceTest {
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final PropertyAnalysisRepository results = mock(PropertyAnalysisRepository.class);
     private final UserRepository users = mock(UserRepository.class);
+    private final PropertyConsultationRepository consultations = mock(PropertyConsultationRepository.class);
     private final AnalysisService statusService = new AnalysisService(mock(AnalysisRequestValidator.class),
-            new AnalysisSnapshotFactory(), runs, events, results, users);
+            new AnalysisSnapshotFactory(), runs, events, results, users, consultations, mock(jakarta.persistence.EntityManager.class));
+
+    @ParameterizedTest
+    @EnumSource(value = AnalysisStatus.class, names = {"COMPLETED", "FAILED"})
+    void deletesChildrenBeforeRunEvenIfEmpty(AnalysisStatus status) {
+        var run = storedRun();
+        when(run.getStatus()).thenReturn(status);
+        when(runs.findForUpdate(100L)).thenReturn(Optional.of(run));
+        statusService.delete(7L, 100L);
+        var order = inOrder(runs, results, consultations);
+        order.verify(runs).findForUpdate(100L);
+        order.verify(results).lockForDeletion(100L);
+        order.verify(consultations).lockForDeletion(100L);
+        order.verify(consultations).deleteForRun(100L);
+        order.verify(results).deleteForRun(100L);
+        order.verify(runs).delete(run);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void deletingUnknownIdStopsAtLookup(long id) {
+        assertEquals(AnalysisErrorCode.ANALYSIS_NOT_FOUND,
+                assertThrows(BusinessException.class, () -> statusService.delete(7L, id)).getErrorCode());
+        verifyNoInteractions(results, consultations);
+        verify(runs, never()).delete(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"7,ANALYSIS_IN_PROGRESS", "8,ANALYSIS_ACCESS_DENIED"})
+    void checksOwnerBeforeProcessingState(long requester, AnalysisErrorCode expected) {
+        var run = storedRun();
+        when(run.getStatus()).thenReturn(AnalysisStatus.PROCESSING);
+        when(runs.findForUpdate(100L)).thenReturn(Optional.of(run));
+        assertEquals(expected, assertThrows(BusinessException.class, () -> statusService.delete(requester, 100L)).getErrorCode());
+        verifyNoInteractions(results, consultations);
+        verify(runs, never()).delete(any());
+    }
+
+    @Test
+    void pendingConsultationStopsBeforeFirstDelete() {
+        var run = completedRun(1L);
+        when(runs.findForUpdate(100L)).thenReturn(Optional.of(run));
+        var pending = mock(PropertyConsultation.class);
+        when(pending.getStatus()).thenReturn(ConsultationStatus.PENDING);
+        when(consultations.lockForDeletion(100L)).thenReturn(List.of(pending));
+        assertEquals(AnalysisErrorCode.PROPERTY_CONSULTATION_IN_PROGRESS,
+                assertThrows(BusinessException.class, () -> statusService.delete(7L, 100L)).getErrorCode());
+        verify(consultations, never()).deleteForRun(any());
+        verify(results, never()).deleteForRun(any());
+        verify(runs, never()).delete(any());
+    }
 
     private static final Map<String, Object> CONDITION = Map.of("industryId", 3, "preferredRegionCode", "11680",
             "totalCapital", 5_000_000_000L, "availableCapital", 70, "loanAmount", 30);
@@ -359,7 +413,7 @@ class AnalysisServiceTest {
         var validator = mock(AnalysisRequestValidator.class);
         var repository = mock(AnalysisRunRepository.class);
         var service = new AnalysisService(validator, new AnalysisSnapshotFactory(), repository,
-                mock(org.springframework.context.ApplicationEventPublisher.class), results, users);
+                mock(org.springframework.context.ApplicationEventPublisher.class), results, users, consultations, mock(jakarta.persistence.EntityManager.class));
         var request = new AnalysisRunRequest(1L, List.of(2L), "analysis");
         when(validator.validate(3L, request)).thenThrow(new BusinessException(code));
         assertSame(code, assertThrows(BusinessException.class, () -> service.start(3L, request)).getErrorCode());

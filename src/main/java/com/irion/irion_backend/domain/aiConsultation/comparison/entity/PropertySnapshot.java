@@ -14,6 +14,19 @@ public record PropertySnapshot(
         Long deposit,
         Long monthlyRent,
         Long keyMoney,
-        Long monthlyManagementFee
+        Long monthlyManagementFee,
+        FinancialResult financialResult
 ) {
+    public record FinancialResult(
+            Long expectedMonthlySales,
+            Long monthlyOperatingProfit,
+            Long breakEvenSales,
+            String breakEvenStatus,
+            Long initialRequiredCash,
+            Long initialOperatingCash,
+            BigDecimal safetyScore,
+            String safetyGrade,
+            Integer recommendationRank,
+            String recommendationReason
+    ) {}
 }

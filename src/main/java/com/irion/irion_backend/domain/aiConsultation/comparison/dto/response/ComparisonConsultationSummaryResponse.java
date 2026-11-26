@@ -16,7 +16,7 @@ public record ComparisonConsultationSummaryResponse(
     public static ComparisonConsultationSummaryResponse from(ComparisonConsultation consultation) {
         return new ComparisonConsultationSummaryResponse(
                 consultation.getId(),
-                consultation.getAnalysisRun().getId(),
+                consultation.getAnalysisRunId(),
                 toProperties(consultation.getPropertySnapshots()),
                 consultation.getCompletedAt()
         );

@@ -2,7 +2,6 @@ package com.irion.irion_backend.domain.aiConsultation.comparison.dto.response;
 
 
 import com.irion.irion_backend.domain.aiConsultation.comparison.entity.ComparisonConsultation;
-import com.irion.irion_backend.domain.analysis.entity.AnalysisRun;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,11 +68,9 @@ public class ComparisonConsultationListResponseTest {
     // ----- helper -----
     private ComparisonConsultation consultation(Long id) {
         ComparisonConsultation consultation = mock(ComparisonConsultation.class);
-        AnalysisRun analysisRun = mock(AnalysisRun.class);
 
         when(consultation.getId()).thenReturn(id);
-        when(consultation.getAnalysisRun()).thenReturn(analysisRun);
-        when(analysisRun.getId()).thenReturn(id);
+        when(consultation.getAnalysisRunId()).thenReturn(id);
 
         return consultation;
     }

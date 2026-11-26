@@ -10,10 +10,10 @@ SELECT id, startup_condition_id, title, status, candidate_property_ids,
        pg_temp.fixture_property_snapshots(candidate_property_ids), condition_snapshot, now(), now()
 FROM runs;
 
-INSERT INTO comparison_ai_consultations (id, analysis_run_id, property_snapshots, status, summary, description, pros_and_cons,
+INSERT INTO comparison_ai_consultations (id, analysis_run_id, user_id, property_snapshots, status, summary, description, pros_and_cons,
                                          model_name, prompt_version, is_saved, completed_at, saved_at, expires_at, created_at, updated_at)
 VALUES
-    (9012, 9014,
+    (9012, 9014, 9001,
      '[{"propertyId":9001,"name":"이대 정문 1층"},{"propertyId":9002,"name":"신촌역 앞"}]'::jsonb,
      'COMPLETED', '저장 후 만료 요약', '저장 후 만료 설명', '저장 후 만료 장단점',
      'gpt-4o-mini', 'v1', true,
