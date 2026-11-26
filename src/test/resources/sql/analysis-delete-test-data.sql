@@ -24,3 +24,8 @@ INSERT INTO comparison_ai_consultations (id,analysis_run_id,user_id,property_sna
     now()+interval '1 day',now(),now());
 INSERT INTO external_data_snapshots (id,source_name,dataset_code,reference_year,fetched_at,processing_version,
     data_payload,created_at,updated_at) VALUES (7,'test','shared',2025,now(),'v1','{}',now(),now());
+INSERT INTO cost_benchmarks (id,kosis_industry_code,kosis_industry_name,region_code,reference_year,
+    monthly_labor_cost,cost_of_sales_rate,monthly_other_operating_cost,created_at,updated_at)
+    VALUES (7,'test','shared','test',2025,100,30,50,now(),now());
+INSERT INTO cost_benchmark_sources (cost_benchmark_id,external_data_snapshot_id) VALUES (7,7);
+INSERT INTO industry_cost_benchmark_mappings (industry_id,cost_benchmark_id) VALUES (1,7);

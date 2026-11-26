@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static com.irion.irion_backend.domain.aiConsultation.common.exception.ConsultationErrorCode.*;
@@ -43,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Testcontainers
 @SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=update", "seoul-open-api.refresh-enabled=false",
         "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.irion.irion_backend.domain.analysis.repository.AnalysisRunRepositoryIntegrationTest$HistorySqlInspector"})
-@Sql(statements = "TRUNCATE users, industries, external_data_snapshots CASCADE")
+@Sql(statements = "TRUNCATE users, industries, cost_benchmarks, external_data_snapshots CASCADE")
 @Sql({"/sql/property-consultation-test-data.sql", "/sql/analysis-delete-test-data.sql"})
 class AnalysisDeletionIntegrationTest {
     @Container @ServiceConnection
@@ -77,6 +78,7 @@ class AnalysisDeletionIntegrationTest {
         var saved = comparisons.getComparisonConsultation(9001L, 1L);
         var temporary = comparisons.getComparisonConsultation(9001L, 2L);
         var list = comparisons.getComparisonConsultations(9001L, null, 10);
+        var originalRows = jdbc.queryForList("select to_jsonb(c)::text from comparison_ai_consultations c order by id", String.class);
         var snapshots = jdbc.queryForList("select property_snapshots::text from comparison_ai_consultations order by id", String.class);
         delete();
         error(ANALYSIS_NOT_FOUND, this::delete);
@@ -86,11 +88,16 @@ class AnalysisDeletionIntegrationTest {
         assertEquals(1, count("select count(*) from property_ai_consultations where id=9101"));
         assertEquals(3, count("select count(*) from candidate_properties where startup_condition_id=9001"));
         assertEquals(1, count("select count(*) from startup_conditions where id=9001"));
+        assertEquals(1, count("select count(*) from users where id=9001"));
+        assertEquals(1, count("select count(*) from cost_benchmarks where id=7"));
+        assertEquals(1, count("select count(*) from cost_benchmark_sources where cost_benchmark_id=7 and external_data_snapshot_id=7"));
+        assertEquals(1, count("select count(*) from industry_cost_benchmark_mappings where industry_id=1 and cost_benchmark_id=7"));
         assertEquals(1, count("select count(*) from external_data_snapshots where id=7"));
         analyses.delete(9001L, 9010L);
         assertEquals(saved, comparisons.getComparisonConsultation(9001L, 1L));
         assertEquals(temporary, comparisons.getComparisonConsultation(9001L, 2L));
         assertEquals(list, comparisons.getComparisonConsultations(9001L, null, 10));
+        assertEquals(originalRows, jdbc.queryForList("select to_jsonb(c)::text from comparison_ai_consultations c order by id", String.class));
         assertEquals(snapshots, jdbc.queryForList("select property_snapshots::text from comparison_ai_consultations order by id", String.class));
         var firstSave = comparisons.saveComparisonConsultation(9001L, 2L);
         assertEquals(firstSave, comparisons.saveComparisonConsultation(9001L, 2L));
@@ -203,29 +210,45 @@ class AnalysisDeletionIntegrationTest {
         }
     }
 
-    // Hold the first transaction's locks through the start of the other transaction's first query.
+    // Release the first transaction only after PostgreSQL reports it is blocking the second.
     private void ordered(Runnable first, Runnable second) throws Exception {
         var finishing = new CountDownLatch(1);
         var competing = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var leaderPid = new AtomicInteger();
+        var followerPid = new AtomicInteger();
         var registered = new AtomicBoolean();
         var executor = Executors.newFixedThreadPool(2);
         try {
             var leader = executor.submit(() -> observe(sql -> {
                 if (registered.compareAndSet(false, true)) {
+                    leaderPid.set(count("select pg_backend_pid()"));
                     TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                         @Override public void beforeCompletion() {
                             finishing.countDown();
-                            await(competing);
+                            await(release);
                         }
                     });
                 }
             }, first));
             await(finishing);
-            var follower = executor.submit(() -> observe(sql -> competing.countDown(), second));
+            var follower = executor.submit(() -> observe(sql -> {
+                if (followerPid.get() == 0) {
+                    followerPid.set(count("select pg_backend_pid()"));
+                    competing.countDown();
+                }
+            }, second));
+            await(competing);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+            while (!jdbc.queryForObject("select ? = any(pg_blocking_pids(?))", Boolean.class, leaderPid.get(), followerPid.get())) {
+                assertTrue(System.nanoTime() < deadline, "PostgreSQL did not report the expected lock wait");
+                Thread.sleep(10);
+            }
+            release.countDown();
             leader.get(15, TimeUnit.SECONDS);
             follower.get(15, TimeUnit.SECONDS);
         } finally {
-            competing.countDown();
+            release.countDown();
             executor.shutdownNow();
         }
     }
