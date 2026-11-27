@@ -201,6 +201,19 @@ class ComparisonMigrationTest {
         }
     }
 
+    @Test
+    void attemptMigrationBackfillsExistingRowsWithoutChangingReports() throws Exception {
+        try (var connection = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             var sql = connection.createStatement()) {
+            sql.execute(migration);
+            sql.execute(Files.readString(Path.of("db/manual/05-support-cross-analysis-comparisons.sql")));
+            String original = scalar(sql,"select jsonb_agg(to_jsonb(c) order by id) from comparison_ai_consultations c");
+            sql.execute(Files.readString(Path.of("db/manual/06-comparison-generation-attempts.sql")));
+            assertThat(scalar(sql,"select bool_and(attempt_no=1 and attempt_started_at=created_at) from comparison_ai_consultations")).isEqualTo("t");
+            assertThat(scalar(sql,"select jsonb_agg(to_jsonb(c)-'attempt_no'-'attempt_started_at' order by id) from comparison_ai_consultations c")).isEqualTo(original);
+        }
+    }
+
     private String scalar(Statement sql, String query) throws SQLException {
         try (var result = sql.executeQuery(query)) {
             result.next();

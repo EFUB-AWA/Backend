@@ -28,7 +28,7 @@ class ComparisonReservationFailureTest {
         when(cause.getConstraintName()).thenReturn("uq_comparison_user_key");
         var failure = new DataIntegrityViolationException("duplicate",cause);
         when(transactions.reserve(1L,ids,"2:10")).thenThrow(failure);
-        when(transactions.reusable(1L,"2:10")).thenReturn(Optional.of(new ComparisonConsultationTransactions.Reservation(detail,null)));
+        when(transactions.reusable(1L,"2:10")).thenReturn(Optional.of(new ComparisonConsultationTransactions.Reservation(detail,null,1)));
         var response = service.create(1L,ids);
         assertFalse(response.created());
         assertSame(detail,response.detail());
@@ -48,15 +48,22 @@ class ComparisonReservationFailureTest {
         when(snapshot.assumptionsSnapshot()).thenReturn(Map.of());
         when(detail.comparisonConsultId()).thenReturn(5L);
         when(transactions.reserve(1L,ids,"2:10")).thenReturn(
-                new ComparisonConsultationTransactions.Reservation(detail,List.of(snapshot,snapshot)));
+                new ComparisonConsultationTransactions.Reservation(detail,List.of(snapshot,snapshot),1));
         var dbFailure = new DataIntegrityViolationException("write failed");
-        when(transactions.complete(5L,null)).thenThrow(dbFailure);
+        when(transactions.reserveRetry(1L,5L)).thenReturn(
+                new ComparisonConsultationTransactions.Reservation(detail,List.of(snapshot,snapshot),2));
+        when(transactions.complete(5L,2,null)).thenThrow(dbFailure);
+        assertSame(dbFailure,assertThrows(DataIntegrityViolationException.class,() -> service.retry(1L,5L)));
+        verify(transactions,never()).fail(5L,2);
+        when(transactions.complete(5L,1,null)).thenThrow(dbFailure);
         assertSame(dbFailure,assertThrows(DataIntegrityViolationException.class,() -> service.create(1L,ids)));
-        verify(transactions,never()).fail(5L);
+        verify(transactions,never()).fail(5L,1);
         when(ai.generate(any())).thenThrow(new BusinessException(AI_CONSULTATION_TIMEOUT));
-        doThrow(dbFailure).when(transactions).fail(5L);
+        doThrow(dbFailure).when(transactions).fail(5L,1);
         assertSame(dbFailure,assertThrows(DataIntegrityViolationException.class,() -> service.create(1L,ids)));
         doThrow(new IllegalStateException("unexpected AI failure")).when(ai).generate(any());
         assertSame(dbFailure,assertThrows(DataIntegrityViolationException.class,() -> service.create(1L,ids)));
+        doThrow(dbFailure).when(transactions).fail(5L,2);
+        assertSame(dbFailure,assertThrows(DataIntegrityViolationException.class,() -> service.retry(1L,5L)));
     }
 }

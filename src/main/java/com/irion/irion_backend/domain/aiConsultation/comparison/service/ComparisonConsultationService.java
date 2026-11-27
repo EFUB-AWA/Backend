@@ -53,21 +53,30 @@ public class ComparisonConsultationService {
             reservation = transactions.reusable(requesterId, key).orElseThrow(() -> failure);
         }
         if (reservation.input() == null) return new Creation(false, reservation.detail());
+        return new Creation(true, generate(reservation));
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ComparisonConsultationDetailResponse retry(Long owner, Long id) {
+        return generate(transactions.reserveRetry(owner, id));
+    }
+
+    private ComparisonConsultationDetailResponse generate(ComparisonConsultationTransactions.Reservation reservation) {
         long id = reservation.detail().comparisonConsultId();
         Report report;
         try {
             report = ai.generate(ComparisonConsultationAiClient.Input.from(reservation.input()));
         } catch (BusinessException failure) {
-            transactions.fail(id);
+            transactions.fail(id, reservation.attempt());
             throw new ComparisonGenerationException(id, failure);
         } catch (RuntimeException failure) {
             log.error("Unexpected comparison generation error id={} type={} location={}", id,
                     failure.getClass().getName(), failure.getStackTrace().length == 0 ? "unknown" : failure.getStackTrace()[0]);
-            transactions.fail(id);
+            transactions.fail(id, reservation.attempt());
             throw new ComparisonGenerationException(id, new BusinessException(
                     com.irion.irion_backend.global.error.GlobalErrorCode.INTERNAL_SERVER_ERROR));
         }
-        return new Creation(true, transactions.complete(id, report));
+        return transactions.complete(id, reservation.attempt(), report);
     }
 
     private boolean isComparisonKeyConflict(Throwable failure) {

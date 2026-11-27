@@ -29,12 +29,12 @@ public class ComparisonConsultationTransactions {
     private final AnalysisRunRepository runs;
     private final UserRepository users;
 
-    record Reservation(ComparisonConsultationDetailResponse detail, List<PropertySnapshot> input) {}
+    record Reservation(ComparisonConsultationDetailResponse detail, List<PropertySnapshot> input, long attempt) {}
     private static LocalDateTime now() { return LocalDateTime.now().truncatedTo(ChronoUnit.MICROS); }
 
     public Optional<Reservation> reusable(Long owner, String key) {
         return comparisons.reusable(owner, key, now())
-                .map(c -> new Reservation(ComparisonConsultationDetailResponse.from(c), null));
+                .map(c -> new Reservation(ComparisonConsultationDetailResponse.from(c), null, c.getAttemptNo()));
     }
 
     public Reservation reserve(Long owner, List<Long> ids, String key) {
@@ -64,17 +64,34 @@ public class ComparisonConsultationTransactions {
             throw new BusinessException(INVALID_COMPARISON_SELECTION);
 
         var snapshots = ids.stream().map(rows::get).map(PropertySnapshot::capture).toList();
-        var pending = comparisons.saveAndFlush(ComparisonConsultation.pending(users.getReferenceById(owner), key, snapshots));
-        return new Reservation(ComparisonConsultationDetailResponse.from(pending), snapshots);
+        var pending = comparisons.saveAndFlush(ComparisonConsultation.pending(users.getReferenceById(owner), key, snapshots, now()));
+        return new Reservation(ComparisonConsultationDetailResponse.from(pending), snapshots, pending.getAttemptNo());
     }
 
-    public ComparisonConsultationDetailResponse complete(Long id, ComparisonConsultation.Report report) {
-        var c = comparisons.lockById(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND));
-        c.complete(report, now());
+    public Reservation reserveRetry(Long owner, Long id) {
+        var c = comparisons.lockById(id).filter(row -> row.getUser().getId().equals(owner))
+                .orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND));
+        c.beginRetry(now());
+        var snapshots = c.getPropertySnapshots();
+        if (snapshots == null || snapshots.size() < 2 || snapshots.size() > 3)
+            throw new BusinessException(ANALYSIS_NOT_READY);
+        var analysisIds = new HashSet<Long>();
+        var candidateIds = new HashSet<Long>();
+        for (var snapshot : snapshots) {
+            if (snapshot == null || !analysisIds.add(snapshot.propertyAnalysisId()) || !candidateIds.add(snapshot.propertyId()))
+                throw new BusinessException(ANALYSIS_NOT_READY);
+            snapshot.requireRetryInput();
+        }
+        return new Reservation(ComparisonConsultationDetailResponse.from(c), snapshots, c.getAttemptNo());
+    }
+
+    public ComparisonConsultationDetailResponse complete(Long id, long attempt, ComparisonConsultation.Report report) {
+        var c = comparisons.lockById(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_PENDING));
+        c.complete(attempt, report, now());
         return ComparisonConsultationDetailResponse.from(c);
     }
 
-    public void fail(Long id) {
-        comparisons.lockById(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_FOUND)).fail(now());
+    public void fail(Long id, long attempt) {
+        comparisons.lockById(id).orElseThrow(() -> new BusinessException(CONSULTATION_NOT_PENDING)).fail(attempt, now());
     }
 }
