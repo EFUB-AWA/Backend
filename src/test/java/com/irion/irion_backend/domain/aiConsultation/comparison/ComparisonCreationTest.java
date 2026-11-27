@@ -395,6 +395,127 @@ class ComparisonCreationTest {
         submit("[9002,9003]").andExpect(status().isConflict());
     }
 
+    private ResultActions retry(long id, long owner) throws Exception {
+        return mvc.perform(post(PATH + "/" + id + "/retry")
+                .header("Authorization","Bearer " + jwt.createAccessToken(owner).token()));
+    }
+
+    private long failedComparison() throws Exception {
+        doThrow(new BusinessException(AI_CONSULTATION_TIMEOUT)).when(ai).generate(any());
+        submit("[9002,9001]").andExpect(status().isGatewayTimeout());
+        return jdbc.queryForObject("select id from comparison_ai_consultations",Long.class);
+    }
+
+    @Test
+    void recoversStalledRetryOfSavedLegacyFailureWithoutDeletingIt() throws Exception {
+        long id = failedComparison();
+        jdbc.update("update comparison_ai_consultations set is_saved=true, saved_at=now() where id=?", id);
+        doAnswer(call -> {
+            var started = jdbc.queryForObject("select attempt_started_at from comparison_ai_consultations where id=?",
+                    LocalDateTime.class, id);
+            var recovery = started.plusHours(1).plusNanos(1000);
+            tx.executeWithoutResult(s -> {
+                assertEquals(1, comparisons.recoverPending(recovery.minusHours(1), recovery, recovery.plusDays(1)));
+                assertEquals(0, comparisons.deleteExpired(recovery.plusDays(1)));
+            });
+            return report(null);
+        }).when(ai).generate(any());
+        retry(id,9001).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONSULTATION_NOT_PENDING"));
+        assertTrue(jdbc.queryForObject("""
+                select is_saved and status='FAILED' and attempt_no=2
+                from comparison_ai_consultations where id=?
+                """, Boolean.class, id));
+    }
+
+    @Test
+    void retryChecksAccessStateExpiryAndLegacyInput() throws Exception {
+        long id = failedComparison();
+        mvc.perform(post(PATH + "/" + id + "/retry")).andExpect(status().isUnauthorized());
+        retry(id,9002).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("CONSULTATION_NOT_FOUND"));
+        retry(id+1,9001).andExpect(status().isNotFound());
+        jdbc.update("update comparison_ai_consultations set expires_at=?",LocalDateTime.now().minusSeconds(1));
+        retry(id,9001).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("CONSULTATION_EXPIRED"));
+        jdbc.update("update comparison_ai_consultations set expires_at=?,property_snapshots='[{},{}]'",LocalDateTime.now().plusHours(2));
+        var before = jdbc.queryForMap("select * from comparison_ai_consultations");
+        retry(id,9001).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANALYSIS_NOT_READY"));
+        assertEquals(before,jdbc.queryForMap("select * from comparison_ai_consultations"));
+        verify(ai).generate(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints={500,502,504})
+    void retryReportsOnlyCommittedFailures(int statusCode) throws Exception {
+        long id = failedComparison();
+        var error = switch(statusCode) {
+            case 500 -> JSON_PARSING_FAILED;
+            case 502 -> AI_CONSULTATION_GENERATION_FAILED;
+            default -> AI_CONSULTATION_TIMEOUT;
+        };
+        doThrow(new BusinessException(error)).when(ai).generate(any());
+        var earliestExpiry = LocalDateTime.now().plusDays(1).minusNanos(1000);
+        retry(id,9001).andExpect(status().is(statusCode)).andExpect(jsonPath("$.code").value(error.name()))
+                .andExpect(jsonPath("$.data.comparisonConsultId").value(id)).andExpect(jsonPath("$.data.status").value("FAILED"));
+        var expiry = jdbc.queryForObject("select expires_at from comparison_ai_consultations where status='FAILED' and attempt_no=2",
+                LocalDateTime.class);
+        assertFalse(expiry.isBefore(earliestExpiry));
+        assertFalse(expiry.isAfter(LocalDateTime.now().plusDays(1)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans={false,true})
+    void recoveredOlderAttemptCannotOverwriteRetry(boolean lateFailure) throws Exception {
+        long id = failedComparison();
+        analyses.delete(9001L,9001L);
+        String identity = "select id, comparison_key, property_snapshots::text from comparison_ai_consultations";
+        var original = jdbc.queryForMap(identity);
+        var firstEntered = new CountDownLatch(1);
+        var secondEntered = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var releaseSecond = new CountDownLatch(1);
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        doAnswer(call -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+            ComparisonConsultationAiClient.Input input = call.getArgument(0);
+            assertEquals(List.of(9002L,9001L), input.properties().stream().map(p -> p.propertyAnalysisId()).toList());
+            if (calls.incrementAndGet()==1) {
+                firstEntered.countDown();
+                assertTrue(releaseFirst.await(15,TimeUnit.SECONDS));
+                if (lateFailure) throw new BusinessException(AI_CONSULTATION_TIMEOUT);
+            } else {
+                secondEntered.countDown();
+                assertTrue(releaseSecond.await(15,TimeUnit.SECONDS));
+            }
+            return report(null);
+        }).when(ai).generate(any());
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var older = pool.submit(() -> retry(id,9001).andReturn());
+            assertTrue(firstEntered.await(8,TimeUnit.SECONDS));
+            retry(id,9001).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONSULTATION_NOT_RETRYABLE"));
+            var started = jdbc.queryForObject("select attempt_started_at from comparison_ai_consultations",LocalDateTime.class);
+            var recovery = started.plusHours(1).plusNanos(1000);
+            tx.executeWithoutResult(s -> {
+                assertEquals(0,comparisons.recoverPending(started,recovery,recovery.plusDays(1)));
+                assertEquals(1,comparisons.recoverPending(recovery.minusHours(1),recovery,recovery.plusDays(1)));
+            });
+            var newer = pool.submit(() -> retry(id,9001).andReturn());
+            assertTrue(secondEntered.await(8,TimeUnit.SECONDS));
+            releaseFirst.countDown();
+            assertEquals(409,older.get(5,TimeUnit.SECONDS).getResponse().getStatus());
+            assertTrue(jdbc.queryForObject("select status='PENDING' and attempt_no=3 and expires_at is null from comparison_ai_consultations", Boolean.class));
+            releaseSecond.countDown();
+            assertEquals(201,newer.get(5,TimeUnit.SECONDS).getResponse().getStatus());
+            retry(id,9001).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONSULTATION_NOT_RETRYABLE"));
+            assertEquals(original,jdbc.queryForMap(identity));
+            assertTrue(jdbc.queryForObject("select expires_at=completed_at+interval '24 hours' from comparison_ai_consultations", Boolean.class));
+            assertEquals(2,calls.get());
+        } finally {
+            releaseFirst.countDown();
+            releaseSecond.countDown();
+            pool.shutdownNow();
+        }
+    }
+
     void awaitWaiters(int count) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
         do {
@@ -416,7 +537,7 @@ class ComparisonCreationTest {
     void recoveryBoundaryAndLateCompletion() throws Exception {
         var recovery = LocalDateTime.of(2026,6,1,12,0);
         doAnswer(call -> {
-            jdbc.update("update comparison_ai_consultations set created_at=?",recovery.minusHours(1));
+            jdbc.update("update comparison_ai_consultations set attempt_started_at=?",recovery.minusHours(1));
             tx.executeWithoutResult(s -> {
                 assertEquals(0,comparisons.deleteExpired(recovery));
                 assertEquals(0,comparisons.recoverPending(recovery.minusHours(1),recovery,recovery.plusDays(1)));

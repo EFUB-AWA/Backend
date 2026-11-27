@@ -58,3 +58,7 @@ psql @conn -X -c '\d+ public.property_analyses'
 ```
 
 기동 로그에서 접속 대상, EntityManagerFactory 초기화 및 애플리케이션 시작을 확인한 뒤 Ctrl+C로 종료한다.
+
+## 비교 컨설팅 재시도 (06)
+
+05 적용 DB에서는 기존 앱의 AI 생성 작업과 쓰기를 종료한 뒤 `06-comparison-generation-attempts.sql`을 한 번 적용하고 신버전을 기동한다. 기존 행은 첫 번째 시도로 간주해 시작 시각을 `created_at`으로 채운다. 새 스키마를 Hibernate로 생성하는 환경에는 엔티티 매핑이 두 컬럼을 생성한다.

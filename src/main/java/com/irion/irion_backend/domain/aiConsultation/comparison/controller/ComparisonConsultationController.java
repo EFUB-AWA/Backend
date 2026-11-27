@@ -45,6 +45,12 @@ public class ComparisonConsultationController {
         return ResponseEntity.status(creation.created() ? HttpStatus.CREATED : HttpStatus.OK).body(creation.detail());
     }
 
+    @PostMapping("/{comparisonConsultId}/retry")
+    public ResponseEntity<ComparisonConsultationDetailResponse> retry(@AuthMember Long requesterId,
+            @PathVariable("comparisonConsultId") Long id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(comparisonConsultationService.retry(requesterId, id));
+    }
+
     @GetMapping("/{comparisonConsultId}")
     public ResponseEntity<ComparisonConsultationDetailResponse> getComparisonConsultation(@AuthMember Long requesterId,
                                                                                           @PathVariable("comparisonConsultId") Long comparisonConsultationId) {

@@ -4,11 +4,12 @@ import com.irion.irion_backend.domain.aiConsultation.common.enums.ConsultationSt
 import com.irion.irion_backend.domain.user.entity.User;
 import com.irion.irion_backend.global.common.entity.BaseEntity;
 import com.irion.irion_backend.global.error.BusinessException;
-import static com.irion.irion_backend.domain.aiConsultation.common.exception.ConsultationErrorCode.CONSULTATION_NOT_PENDING;
+import static com.irion.irion_backend.domain.aiConsultation.common.exception.ConsultationErrorCode.*;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -28,6 +29,14 @@ public class ComparisonConsultation extends BaseEntity {
     @Column(name = "comparison_key", length = 64, updatable = false)
     private String comparisonKey;
 
+    @Column(name = "attempt_no", nullable = false)
+    @ColumnDefault("1")
+    private long attemptNo;
+
+    @Column(name = "attempt_started_at", nullable = false)
+    @ColumnDefault("current_timestamp")
+    private LocalDateTime attemptStartedAt;
+
     private Long recommendedPropertyAnalysisId;
     @Column(columnDefinition = "text")
     private String conditionDifferences;
@@ -46,7 +55,7 @@ public class ComparisonConsultation extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @Column(name = "property_snapshots", columnDefinition = "jsonb", nullable = false)
+    @Column(name = "property_snapshots", columnDefinition = "jsonb", nullable = false, updatable = false)
     @JdbcTypeCode(SqlTypes.JSON)
     private List<PropertySnapshot> propertySnapshots;
 
@@ -82,19 +91,41 @@ public class ComparisonConsultation extends BaseEntity {
     private LocalDateTime expiresAt;
 
 
-    public static ComparisonConsultation pending(User user, String key, List<PropertySnapshot> snapshots) {
+    public static ComparisonConsultation pending(User user, String key, List<PropertySnapshot> snapshots, LocalDateTime now) {
         if (key == null || key.isBlank() || snapshots.size() < 2 || snapshots.size() > 3)
             throw new IllegalArgumentException("Invalid comparison reservation");
         var c = new ComparisonConsultation();
         c.user = user;
         c.comparisonKey = key;
         c.propertySnapshots = List.copyOf(snapshots);
+        c.attemptNo = 1;
+        c.attemptStartedAt = now;
         c.status = ConsultationStatus.PENDING;
         return c;
     }
 
-    public void complete(Report report, LocalDateTime now) {
-        requirePending();
+    public void beginRetry(LocalDateTime now) {
+        if (status != ConsultationStatus.FAILED) throw new BusinessException(CONSULTATION_NOT_RETRYABLE);
+        if (isExpired(now)) throw new BusinessException(CONSULTATION_EXPIRED);
+        attemptNo++;
+        attemptStartedAt = now;
+        status = ConsultationStatus.PENDING;
+        expiresAt = null;
+        completedAt = null;
+        summary = null;
+        description = null;
+        prosAndCons = null;
+        conditionDifferences = null;
+        modelName = null;
+        promptVersion = null;
+        riskFactors = null;
+        positiveFactors = null;
+        recommendedContractConditions = null;
+        recommendedPropertyAnalysisId = null;
+    }
+
+    public void complete(long attempt, Report report, LocalDateTime now) {
+        requirePending(attempt);
         recommendedPropertyAnalysisId = report.recommendedPropertyAnalysisId();
         summary = report.summary();
         description = report.description();
@@ -113,14 +144,14 @@ public class ComparisonConsultation extends BaseEntity {
             List<String> positiveFactors, List<String> recommendedContractConditions, String conditionDifferences,
             String modelName, String promptVersion) {}
 
-    public void fail(LocalDateTime now) {
-        requirePending();
+    public void fail(long attempt, LocalDateTime now) {
+        requirePending(attempt);
         status = ConsultationStatus.FAILED;
         expiresAt = now.plusHours(24);
     }
 
-    private void requirePending() {
-        if (status != ConsultationStatus.PENDING) throw new BusinessException(CONSULTATION_NOT_PENDING);
+    private void requirePending(long attempt) {
+        if (status != ConsultationStatus.PENDING || attemptNo != attempt) throw new BusinessException(CONSULTATION_NOT_PENDING);
     }
 
     public boolean isExpired(LocalDateTime now) {

@@ -34,7 +34,7 @@ public interface ComparisonConsultationRepository extends JpaRepository<Comparis
     @Modifying
     @Query("""
         update ComparisonConsultation c set c.status = FAILED, c.completedAt = null, c.expiresAt = :expires,
-        c.updatedAt = :now where c.status = PENDING and c.saved = false and c.createdAt < :cutoff
+        c.updatedAt = :now where c.status = PENDING and c.attemptStartedAt < :cutoff
         """)
     int recoverPending(LocalDateTime cutoff, LocalDateTime now, LocalDateTime expires);
 

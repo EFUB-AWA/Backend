@@ -54,7 +54,9 @@ class AnalysisDeletionIntegrationTest {
             .withCopyFileToContainer(MountableFile.forHostPath("db/manual/04-decouple-comparison-consultations.sql"),
                     "/docker-entrypoint-initdb.d/04-comparison.sql")
             .withCopyFileToContainer(MountableFile.forHostPath("db/manual/05-support-cross-analysis-comparisons.sql"),
-                    "/docker-entrypoint-initdb.d/05-comparison.sql");
+                    "/docker-entrypoint-initdb.d/05-comparison.sql")
+            .withCopyFileToContainer(MountableFile.forHostPath("db/manual/06-comparison-generation-attempts.sql"),
+                    "/docker-entrypoint-initdb.d/06-comparison.sql");
 
     @Autowired AnalysisService analyses;
     @Autowired AnalysisResultService results;

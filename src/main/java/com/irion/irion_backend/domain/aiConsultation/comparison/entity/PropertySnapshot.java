@@ -27,6 +27,24 @@ public record PropertySnapshot(Integer schemaVersion, Long analysisRunId, Long p
             Long initialOperatingCash, BigDecimal safetyScore, String safetyGrade, Integer recommendationRank,
             String recommendationReason) {}
 
+    public void requireRetryInput() {
+        if (propertyAnalysisId == null || propertyId == null || analyzedAt == null || dataCutoffAt == null
+                || calculationVersion == null || calculationVersion.isBlank() || conditionSnapshot == null
+                || assumptionsSnapshot == null || name == null || address == null || areaM2 == null
+                || deposit == null || monthlyRent == null || keyMoney == null || monthlyManagementFee == null
+                || financialResult == null) throw new BusinessException(ANALYSIS_NOT_READY);
+        comparisonCondition(conditionSnapshot);
+        var r = financialResult;
+        try {
+            new CalculatedPropertyResult(propertyId, r.expectedMonthlySales(), r.monthlyFixedCost(), r.variableCostRate(),
+                    r.monthlyOperatingProfit(), r.breakEvenSales(), r.breakEvenStatus(), r.initialRequiredCash(),
+                    r.initialOperatingCash(), r.safetyScore(), r.safetyGrade(), r.recommendationRank(),
+                    r.recommendationReason()).requireComplete();
+        } catch (NullPointerException incomplete) {
+            throw new BusinessException(ANALYSIS_NOT_READY);
+        }
+    }
+
     public static PropertySnapshot capture(PropertyAnalysis p) {
         var run = p.getAnalysisRun();
         Long candidate = p.getCandidateProperty().getId();
