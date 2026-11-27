@@ -65,8 +65,7 @@ public class AnalysisWorker {
             return;
         }
         try {
-            results.complete(runId, result.properties(), result.assumptions(), result.calculationVersion(),
-                    result.dataCutoffAt(), result.horizonMonths());
+            results.complete(runId, result);
         } catch (RuntimeException cause) {
             // The result service owns rollback and the separate FAILED transaction.
             log.error("Cannot persist results for analysis run {}", runId, cause);

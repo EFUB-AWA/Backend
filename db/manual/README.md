@@ -62,3 +62,16 @@ psql @conn -X -c '\d+ public.property_analyses'
 ## 비교 컨설팅 재시도 (06)
 
 05 적용 DB에서는 기존 앱의 AI 생성 작업과 쓰기를 종료한 뒤 `06-comparison-generation-attempts.sql`을 한 번 적용하고 신버전을 기동한다. 기존 행은 첫 번째 시도로 간주해 시작 시각을 `created_at`으로 채운다. 새 스키마를 Hibernate로 생성하는 환경에는 엔티티 매핑이 두 컬럼을 생성한다.
+
+## 스트레스 테스트 (07)
+
+06까지 적용된 DB에서 두 결과 테이블이 아직 생성되지 않았으면 신버전 앱을 기동하기 전에 07을 한 번 적용한다. 기존 분석 이력은 재계산하지 않는다.
+
+```powershell
+psql @conn -X -v ON_ERROR_STOP=1 -f db/manual/07-create-stress-test-tables.sql
+if ($LASTEXITCODE -ne 0) { throw '07 적용 실패' }
+psql @conn -X -c '\d+ public.stress_tests'
+psql @conn -X -c '\d+ public.monthly_cash_flows'
+```
+
+매물 분석별 감소율과 시나리오별 월 번호의 UNIQUE, 두 부모 외래 키의 ON DELETE CASCADE를 확인한 뒤 앱을 기동한다.
