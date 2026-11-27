@@ -29,7 +29,7 @@ class KosisApiClientTest {
 
         inspectAndSave(
                 response,
-                "DT_3ME0142.json"
+                "DT_3ME0144.json"
         );
     }
 
@@ -39,7 +39,7 @@ class KosisApiClientTest {
 
         inspectAndSave(
                 response,
-                "DT_3ME0144.json"
+                "DT_3ME0142.json"
         );
     }
 
