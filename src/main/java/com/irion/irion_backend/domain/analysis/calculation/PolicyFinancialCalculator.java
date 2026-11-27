@@ -5,6 +5,7 @@ import com.irion.irion_backend.domain.analysis.calculation.CalculationPolicy.Fin
 import com.irion.irion_backend.domain.analysis.calculation.CalculationPolicy.OpeningCost;
 import com.irion.irion_backend.domain.analysis.calculation.CalculationPolicy.Scored;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
+import com.irion.irion_backend.domain.analysis.dto.StressTestResult;
 import com.irion.irion_backend.domain.analysis.entity.PropertySnapshotV1;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -78,8 +79,24 @@ public class PolicyFinancialCalculator implements FinancialCalculator {
         if (assumptions.putIfAbsent("financialCalculation", audit) != null) {
             throw new IllegalArgumentException("financialCalculation is reserved for the arithmetic audit");
         }
-        return new Result(ids.stream().map(rows::get).toList(), Map.copyOf(assumptions),
-                rules.version(), rules.dataCutoffAt(), rules.horizonMonths());
+        var ordered = ids.stream().map(rows::get).toList();
+        Object loan = condition.get("loanAmount");
+        if (!MvpFinancialPolicy.VERSION.equals(rules.version()) || loan == null
+                || new BigDecimal(loan.toString()).signum() != 0) {
+            return new Result(ordered, Map.copyOf(assumptions), rules.version(), rules.dataCutoffAt(), rules.horizonMonths());
+        }
+        var scenarios = new HashMap<Long, List<StressTestResult>>();
+        for (var property : properties) {
+            long id = property.candidatePropertyId();
+            scenarios.put(id, StressTestCalculator.calculate(rows.get(id), sales -> rules.assessment().apply(
+                    calculateProperty(property, sales, overhead, capital, rate, rules.openingCosts()))));
+        }
+        assumptions.put("stressTest", Map.of("version", StressTestCalculator.VERSION,
+                "assessmentPolicy", rules.version(), "horizonMonths", StressTestCalculator.MONTHS,
+                "salesDecreasePercent", StressTestCalculator.DECREASES, "duration", "FULL_HORIZON",
+                "loanBasis", "DEBT_FREE", "depletionThresholdWon", 0, "wonRounding", "HALF_UP"));
+        return new Result(ordered, Map.copyOf(assumptions), rules.version() + "+" + StressTestCalculator.VERSION,
+                rules.dataCutoffAt(), StressTestCalculator.MONTHS, Map.copyOf(scenarios));
     }
 
     private static Financials calculateProperty(PropertySnapshotV1 property, BigDecimal sales, BigDecimal overhead,

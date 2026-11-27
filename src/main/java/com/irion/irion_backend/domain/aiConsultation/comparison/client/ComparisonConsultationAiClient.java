@@ -15,9 +15,19 @@ public interface ComparisonConsultationAiClient {
             boolean different = conditions.stream().anyMatch(values -> !values.entrySet().containsAll(common.entrySet()))
                     || conditions.stream().map(values -> values.get("industryCode")).filter(Objects::nonNull)
                             .distinct().count() > 1;
-            boolean bases = properties.stream().map(s -> List.of(s.calculationVersion(), AiProperty.basis(s)))
+            boolean bases = properties.stream().map(s -> List.of(financialVersion(s), AiProperty.basis(s)))
                     .distinct().count() > 1;
             return new Input(List.copyOf(properties), different, bases);
+        }
+
+        private static String financialVersion(PropertySnapshot s) {
+            if (s.assumptionsSnapshot().get("stressTest") instanceof Map<?,?> stress
+                    && stress.get("assessmentPolicy") instanceof String policy
+                    && stress.get("version") instanceof String version
+                    && s.calculationVersion().equals(policy + "+" + version)) {
+                return policy;
+            }
+            return s.calculationVersion();
         }
     }
     record AiProperty(Long propertyAnalysisId, String name, String address, String addressDetail, BigDecimal areaM2,

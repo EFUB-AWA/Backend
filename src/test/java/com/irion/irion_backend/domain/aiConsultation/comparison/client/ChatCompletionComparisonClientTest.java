@@ -99,6 +99,16 @@ class ChatCompletionComparisonClientTest {
     }
 
     @Test
+    void comparesUnderlyingPolicyAndPreservesCompositeVersion() {
+        var old = snapshot(8,30,"v1",Map.of());
+        var same = snapshot(12,30,"v1+STRESS_V1",Map.of("stressTest",Map.of("assessmentPolicy","v1","version","STRESS_V1")));
+        var changed = snapshot(12,30,"v2+STRESS_V1",Map.of("stressTest",Map.of("assessmentPolicy","v2","version","STRESS_V1")));
+        assertFalse(ComparisonConsultationAiClient.Input.from(List.of(old,same)).differentCalculationBasis());
+        assertTrue(ComparisonConsultationAiClient.Input.from(List.of(old,changed)).differentCalculationBasis());
+        assertEquals("v1+STRESS_V1", ComparisonConsultationAiClient.AiProperty.from(same).calculationVersion());
+    }
+
+    @Test
     void requiresExplanationForVersionOrPolicyChanges() {
         var first = snapshot(8,30,"v1",Map.of("scoreRounding","HALF_UP"));
         for (var second : List.of(snapshot(12,30,"v2",Map.of("scoreRounding","HALF_UP")),

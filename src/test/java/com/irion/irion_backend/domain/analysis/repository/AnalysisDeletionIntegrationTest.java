@@ -4,6 +4,9 @@ import com.irion.irion_backend.domain.aiConsultation.comparison.service.Comparis
 import com.irion.irion_backend.domain.aiConsultation.property.client.ConsultationAiClient;
 import com.irion.irion_backend.domain.aiConsultation.property.service.PropertyConsultationTransactions;
 import com.irion.irion_backend.domain.analysis.dto.CalculatedPropertyResult;
+import com.irion.irion_backend.domain.analysis.calculation.FinancialCalculator;
+import com.irion.irion_backend.domain.analysis.calculation.MvpFinancialPolicy;
+import com.irion.irion_backend.domain.analysis.calculation.PolicyFinancialCalculator;
 import com.irion.irion_backend.domain.analysis.service.AnalysisFailureService;
 import com.irion.irion_backend.domain.analysis.service.AnalysisResultService;
 import com.irion.irion_backend.domain.analysis.service.AnalysisService;
@@ -56,7 +59,9 @@ class AnalysisDeletionIntegrationTest {
             .withCopyFileToContainer(MountableFile.forHostPath("db/manual/05-support-cross-analysis-comparisons.sql"),
                     "/docker-entrypoint-initdb.d/05-comparison.sql")
             .withCopyFileToContainer(MountableFile.forHostPath("db/manual/06-comparison-generation-attempts.sql"),
-                    "/docker-entrypoint-initdb.d/06-comparison.sql");
+                    "/docker-entrypoint-initdb.d/06-comparison.sql")
+            .withCopyFileToContainer(MountableFile.forHostPath("db/manual/07-create-stress-test-tables.sql"),
+                    "/docker-entrypoint-initdb.d/07-stress.sql");
 
     @Autowired AnalysisService analyses;
     @Autowired AnalysisResultService results;
@@ -64,6 +69,88 @@ class AnalysisDeletionIntegrationTest {
     @Autowired PropertyConsultationTransactions ai;
     @Autowired ComparisonConsultationService comparisons;
     @Autowired JdbcTemplate jdbc;
+    @Autowired AnalysisRunRepository runs;
+
+    private FinancialCalculator.Result prepareStressRun() {
+        jdbc.update("delete from property_ai_consultations where id in (9001,9002,9003)");
+        jdbc.update("delete from property_analyses where analysis_run_id=9001");
+        jdbc.update("""
+                update analysis_runs set status='PROCESSING', property_snapshots=(
+                    select jsonb_agg(item || '{"commercialAreaCode":"A"}'::jsonb order by ord)
+                    from jsonb_array_elements(property_snapshots) with ordinality as items(item,ord)
+                ), condition_snapshot=condition_snapshot || '{
+                    "monthlyLaborCost":0,"monthlyOtherOperatingCost":0,"costOfSalesRate":20,
+                    "seoulCommercialStatistics":{"schemaVersion":1,"capturedAt":"2026-06-30T00:00:00Z",
+                    "byCommercialAreaCode":{"A":{"commercialAreaCode":"A","industryCode":"CS100001",
+                    "quarterCode":"20262","reportedSalesAmountWon":"10000","similarIndustryStoreCount":1}}}
+                }'::jsonb where id=9001
+                """);
+        var run = runs.findById(9001L).orElseThrow();
+        return new PolicyFinancialCalculator(java.util.Optional.of(new MvpFinancialPolicy()))
+                .calculate(run.getConditionSnapshot(), run.getPropertySnapshots());
+    }
+
+    @Test
+    void persistsStressRowsOnceAndCascadesOnlyWithTheirSource() {
+        var result = prepareStressRun();
+        results.complete(9001L, result);
+        results.complete(9001L, result);
+        assertEquals(12, count("select count(*) from stress_tests"));
+        assertEquals(144, count("select count(*) from monthly_cash_flows"));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
+                insert into stress_tests(property_analysis_id,sales_decrease_percent,safety_score,safety_grade,
+                    depletion_status,depletion_month_index)
+                select property_analysis_id,sales_decrease_percent,safety_score,safety_grade,
+                    depletion_status,depletion_month_index from stress_tests limit 1
+                """));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
+                insert into monthly_cash_flows(stress_test_id,month_index,opening_cash,sales,variable_cost,fixed_cost,
+                    loan_interest,principal_repayment,net_cash_flow,closing_cash)
+                select stress_test_id,month_index,opening_cash,sales,variable_cost,fixed_cost,
+                    loan_interest,principal_repayment,net_cash_flow,closing_cash from monthly_cash_flows limit 1
+                """));
+        assertEquals(3, count("""
+                select count(*) from stress_tests s join property_analyses p on p.id=s.property_analysis_id
+                where s.sales_decrease_percent=0 and s.safety_grade=p.safety_grade and s.safety_score=p.safety_score
+                """));
+        assertEquals(1, count("""
+                select count(*) from analysis_runs where id=9001 and status='COMPLETED' and horizon_months=12
+                and calculation_version='MVP_FINANCIAL_V1+STRESS_V1' and assumptions_snapshot->'stressTest' is not null
+                """));
+        analyses.delete(9001L, 9010L);
+        assertEquals(144, count("select count(*) from monthly_cash_flows"));
+        delete();
+        assertEquals(0, count("select count(*) from monthly_cash_flows"));
+        assertEquals(0, count("select count(*) from stress_tests"));
+        assertEquals(2, count("select count(*) from comparison_ai_consultations where id in (1,2)"));
+    }
+
+    @Test
+    void incompleteStressVersionFailsBeforeAnyPropertyIsSaved() {
+        var result = prepareStressRun();
+        var incomplete = new FinancialCalculator.Result(result.properties(), result.assumptions(),
+                result.calculationVersion(), result.dataCutoffAt(), result.horizonMonths(), Map.of());
+        assertThrows(IllegalArgumentException.class, () -> results.complete(9001L, incomplete));
+        assertEquals(1, count("select count(*) from analysis_runs where id=9001 and status='FAILED'"));
+        assertEquals(0, count("select count(*) from property_analyses where analysis_run_id=9001"));
+        assertEquals(0, count("select count(*) from stress_tests"));
+        assertEquals(0, count("select count(*) from monthly_cash_flows"));
+    }
+
+    @Test
+    void monthlyInsertFailureRollsBackAllResultsAndMarksRunFailed() {
+        var result = prepareStressRun();
+        jdbc.execute("alter table monthly_cash_flows add constraint reject_test_month check (month_index < 12)");
+        try {
+            assertThrows(RuntimeException.class, () -> results.complete(9001L, result));
+            assertEquals(1, count("select count(*) from analysis_runs where id=9001 and status='FAILED'"));
+            assertEquals(0, count("select count(*) from property_analyses where analysis_run_id=9001"));
+            assertEquals(0, count("select count(*) from stress_tests"));
+            assertEquals(0, count("select count(*) from monthly_cash_flows"));
+        } finally {
+            jdbc.execute("alter table monthly_cash_flows drop constraint reject_test_month");
+        }
+    }
 
     private void delete() {
         analyses.delete(9001L, 9001L);
