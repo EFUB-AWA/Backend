@@ -2,9 +2,11 @@ package com.irion.irion_backend.domain.propertyAnalysis.controller;
 
 import com.irion.irion_backend.domain.propertyAnalysis.dto.PropertyAnalysisDetailResponse;
 import com.irion.irion_backend.domain.propertyAnalysis.dto.StressTestListResponse;
+import com.irion.irion_backend.domain.propertyAnalysis.dto.StressTestDetailResponse;
 import com.irion.irion_backend.domain.propertyAnalysis.service.StressTestQueryService;
 import com.irion.irion_backend.global.error.BusinessException;
 import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.STRESS_TEST_FETCH_FAILED;
+import static com.irion.irion_backend.domain.propertyAnalysis.exception.PropertyAnalysisErrorCode.STRESS_TEST_DETAIL_FETCH_FAILED;
 import lombok.extern.slf4j.Slf4j;
 import com.irion.irion_backend.domain.propertyAnalysis.service.PropertyAnalysisQueryService;
 import com.irion.irion_backend.global.security.auth.AuthMember;
@@ -38,5 +40,18 @@ public class PropertyAnalysisQueryController {
     @GetMapping("/{propertyAnalysisId}")
     public PropertyAnalysisDetailResponse getDetail(@AuthMember Long requesterId, @PathVariable("propertyAnalysisId") Long propertyAnalysisId) {
         return propertyAnalysisQueryService.getDetail(requesterId, propertyAnalysisId);
+    }
+
+    @GetMapping("/{propertyAnalysisId}/stress-tests/{stressTestId}")
+    public StressTestDetailResponse getStressTestDetail(@AuthMember Long requesterId,
+                                                        @PathVariable Long propertyAnalysisId, @PathVariable Long stressTestId) {
+        try {
+            return stressTestQueryService.getScenario(requesterId, propertyAnalysisId, stressTestId);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("Failed to fetch stress test {} for property analysis {}", stressTestId, propertyAnalysisId, e);
+            throw new BusinessException(STRESS_TEST_DETAIL_FETCH_FAILED);
+        }
     }
 }

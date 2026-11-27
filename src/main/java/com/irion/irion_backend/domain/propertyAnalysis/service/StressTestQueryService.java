@@ -2,6 +2,7 @@ package com.irion.irion_backend.domain.propertyAnalysis.service;
 
 import com.irion.irion_backend.domain.analysis.repository.StressTestRepository;
 import com.irion.irion_backend.domain.propertyAnalysis.dto.StressTestListResponse;
+import com.irion.irion_backend.domain.propertyAnalysis.dto.StressTestDetailResponse;
 import com.irion.irion_backend.domain.propertyAnalysis.repository.PropertyAnalysisQueryRepository;
 import com.irion.irion_backend.global.error.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +20,27 @@ public class StressTestQueryService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StressTestListResponse getScenarios(Long requesterId, Long propertyAnalysisId) {
-        var ownerId = propertyAnalyses.findOwnerIdByPropertyAnalysisId(propertyAnalysisId)
-                .orElseThrow(() -> new BusinessException(PROPERTY_ANALYSIS_NOT_FOUND));
-        if (!ownerId.equals(requesterId)) throw new BusinessException(PROPERTY_ANALYSIS_ACCESS_DENIED);
+        requireOwner(requesterId, propertyAnalysisId);
         var rows = stressTests.findByPropertyAnalysis_IdOrderBySalesDecreasePercentAsc(propertyAnalysisId);
         if (rows.isEmpty()) throw new BusinessException(STRESS_TEST_NOT_READY);
         return new StressTestListResponse(propertyAnalysisId,
                 rows.stream().map(StressTestListResponse.Scenario::from).toList());
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public StressTestDetailResponse getScenario(Long requesterId, Long propertyAnalysisId, Long stressTestId) {
+        requireOwner(requesterId, propertyAnalysisId);
+        var row = stressTests.findById(stressTestId)
+                .orElseThrow(() -> new BusinessException(STRESS_TEST_NOT_FOUND));
+        if (!propertyAnalysisId.equals(row.getPropertyAnalysis().getId())) {
+            throw new BusinessException(STRESS_TEST_PROPERTY_MISMATCH);
+        }
+        return StressTestDetailResponse.from(row);
+    }
+
+    private void requireOwner(Long requesterId, Long propertyAnalysisId) {
+        var ownerId = propertyAnalyses.findOwnerIdByPropertyAnalysisId(propertyAnalysisId)
+                .orElseThrow(() -> new BusinessException(PROPERTY_ANALYSIS_NOT_FOUND));
+        if (!ownerId.equals(requesterId)) throw new BusinessException(PROPERTY_ANALYSIS_ACCESS_DENIED);
     }
 }
